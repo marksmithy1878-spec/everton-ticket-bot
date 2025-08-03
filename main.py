@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import os
 
-# Load secrets from Railway environment variables
+# Load secrets from Render environment variables
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
@@ -28,7 +28,7 @@ def check_tickets():
         page_text = soup.get_text()
 
         if all(word.lower() in page_text.lower() for word in KEYWORDS):
-            send_telegram_message("🎫 Everton v Brighton resale tickets are available!")
+            send_telegram_message("🎟 Everton v Brighton resale tickets are available!")
     except Exception as e:
         print("Error checking tickets:", e)
 
