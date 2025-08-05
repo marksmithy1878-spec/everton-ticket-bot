@@ -6,9 +6,9 @@ import os
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-ITEMS_COUNT_API = "https://www.eticketing.co.uk/evertonfc/api/ItemsCount"
-TICKET_PAGE_URL = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1205"
-VALIDATION_URL = "https://www.eticketing.co.uk/evertonfc/EDP/Validation/EventNotAllowed?eventId=1205&reason=EventNoAvailableSalesModesOrSoldOut"
+EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1205"
+SOLD_OUT_REDIRECT = "https://www.eticketing.co.uk/evertonfc/EDP/Validation/EventNotAllowed?eventId=1205&reason=EventNoAvailableSalesModesOrSoldOut"
+MAIN_EVENTS_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event"
 
 previously_available = False
 
@@ -20,49 +20,59 @@ def send_telegram_message(message):
     except Exception as e:
         print("Failed to send Telegram message:", e)
 
-def check_tickets():
-    global previously_available
+def tickets_are_available():
+    """Returns True if purchasable tickets are likely available, False otherwise."""
     try:
-        # Check API first
-        response = requests.get(ITEMS_COUNT_API, timeout=10, allow_redirects=True)
+        # 1. Fetch event page
+        r = requests.get(EVENT_PAGE, timeout=10, allow_redirects=True)
 
-        # Check redirect to sold out page
-        if response.url.startswith(VALIDATION_URL):
-            print("Redirected to Validation page — no tickets.")
-            previously_available = False
-            return
+        # 2. Redirect = sold out
+        if SOLD_OUT_REDIRECT in r.url:
+            return False
 
-        # Parse API response
-        try:
-            counts = response.json()
-        except ValueError:
-            counts = [0]
+        soup = BeautifulSoup(r.text, "html.parser")
+        page_text = soup.get_text(separator=" ").lower()
 
-        if isinstance(counts, int):
-            counts = [counts]
+        # 3. Overlay message = sold out
+        if "no seats available" in page_text:
+            return False
 
-        # Determine availability from API
-        available = any(c > 0 for c in counts)
+        # 4. Check main events page for Sold Out flag
+        list_check = requests.get(MAIN_EVENTS_PAGE, timeout=10)
+        if "sold out" in list_check.text.lower():
+            return False
 
-        # If API shows 0, double-check main ticket page for “Sold Out”
-        if not available:
-            html = requests.get(TICKET_PAGE_URL, timeout=10).text
-            soup = BeautifulSoup(html, "html.parser")
-            if "sold out" in soup.get_text().lower():
-                available = False
-            else:
-                # If no sold-out text and API says 0, treat as available (edge case)
-                available = True
+        # 5. Ghost ticket filter:
+        # Look for actual sections/prices and ensure they're not marked unavailable
+        # Many eticketing systems wrap active prices in <span> or <a> tags
+        price_elements = soup.find_all(string=lambda text: "£" in text)
+        section_links = soup.find_all("a", href=True)
 
-        # Send alert only on change from unavailable to available
-        if available and not previously_available:
-            send_telegram_message(f"🎟 Everton v Brighton tickets are AVAILABLE!\n👉 {TICKET_PAGE_URL}")
+        # Filter: must have price and section link (indicating selectable seat)
+        if price_elements and section_links:
+            # Extra filter: ignore links with disabled/unavailable markers
+            if not any("unavailable" in link.get("class", []) for link in section_links):
+                return True
 
-        previously_available = available
+        return False
 
     except Exception as e:
         print("Error checking tickets:", e)
+        return False
 
+def check_tickets():
+    global previously_available
+    available = tickets_are_available()
+
+    if available and not previously_available:
+        send_telegram_message(f"🎟 Everton v Brighton resale tickets are AVAILABLE!\n👉 {EVENT_PAGE}")
+        print("Alert sent: tickets available.")
+    elif not available:
+        print("No tickets available.")
+
+    previously_available = available
+
+# Run every 60 seconds
 while True:
     check_tickets()
     time.sleep(60)
