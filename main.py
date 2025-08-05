@@ -3,19 +3,14 @@ from bs4 import BeautifulSoup
 import time
 import os
 
-# Load secrets from Render environment variables
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# Direct ticket availability URL
-URL = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1205"
+ITEMS_COUNT_API = "https://www.eticketing.co.uk/evertonfc/api/ItemsCount"
+TICKET_PAGE_URL = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1205"
+VALIDATION_URL = "https://www.eticketing.co.uk/evertonfc/EDP/Validation/EventNotAllowed?eventId=1205&reason=EventNoAvailableSalesModesOrSoldOut"
 
-# Phrases indicating NO tickets
-SOLD_OUT_KEYWORDS = [
-    "Sold Out",
-    "No tickets available",
-    "This event currently has no seats available"
-]
+previously_available = False
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -26,19 +21,48 @@ def send_telegram_message(message):
         print("Failed to send Telegram message:", e)
 
 def check_tickets():
+    global previously_available
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(URL, headers=headers, timeout=10)
-        soup = BeautifulSoup(r.text, "html.parser")
-        page_text = soup.get_text()
+        # Check API first
+        response = requests.get(ITEMS_COUNT_API, timeout=10, allow_redirects=True)
 
-        # If NONE of the sold-out phrases are present → tickets likely available
-        if not any(keyword.lower() in page_text.lower() for keyword in SOLD_OUT_KEYWORDS):
-            send_telegram_message("🎟 Everton v Brighton resale tickets are AVAILABLE!")
+        # Check redirect to sold out page
+        if response.url.startswith(VALIDATION_URL):
+            print("Redirected to Validation page — no tickets.")
+            previously_available = False
+            return
+
+        # Parse API response
+        try:
+            counts = response.json()
+        except ValueError:
+            counts = [0]
+
+        if isinstance(counts, int):
+            counts = [counts]
+
+        # Determine availability from API
+        available = any(c > 0 for c in counts)
+
+        # If API shows 0, double-check main ticket page for “Sold Out”
+        if not available:
+            html = requests.get(TICKET_PAGE_URL, timeout=10).text
+            soup = BeautifulSoup(html, "html.parser")
+            if "sold out" in soup.get_text().lower():
+                available = False
+            else:
+                # If no sold-out text and API says 0, treat as available (edge case)
+                available = True
+
+        # Send alert only on change from unavailable to available
+        if available and not previously_available:
+            send_telegram_message(f"🎟 Everton v Brighton tickets are AVAILABLE!\n👉 {TICKET_PAGE_URL}")
+
+        previously_available = available
+
     except Exception as e:
         print("Error checking tickets:", e)
 
-# Check every 60 seconds
 while True:
     check_tickets()
     time.sleep(60)
