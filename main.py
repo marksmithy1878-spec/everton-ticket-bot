@@ -3,13 +3,16 @@ from bs4 import BeautifulSoup
 import time
 import os
 
+# Load from environment variables (Render or local)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+# Target URLs
 EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1205"
 SOLD_OUT_REDIRECT = "https://www.eticketing.co.uk/evertonfc/EDP/Validation/EventNotAllowed?eventId=1205&reason=EventNoAvailableSalesModesOrSoldOut"
 MAIN_EVENTS_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event"
 
+# State tracking to avoid duplicate notifications
 previously_available = False
 
 def send_telegram_message(message):
@@ -21,38 +24,28 @@ def send_telegram_message(message):
         print("Failed to send Telegram message:", e)
 
 def tickets_are_available():
-    """Returns True if purchasable tickets are likely available, False otherwise."""
     try:
-        # 1. Fetch event page
+        # 1. Check for redirect (hard sold out state)
         r = requests.get(EVENT_PAGE, timeout=10, allow_redirects=True)
-
-        # 2. Redirect = sold out
         if SOLD_OUT_REDIRECT in r.url:
             return False
 
+        # 2. Check for overlay message (no seats available)
         soup = BeautifulSoup(r.text, "html.parser")
         page_text = soup.get_text(separator=" ").lower()
-
-        # 3. Overlay message = sold out
         if "no seats available" in page_text:
             return False
 
-        # 4. Check main events page for Sold Out flag
-        list_check = requests.get(MAIN_EVENTS_PAGE, timeout=10)
-        if "sold out" in list_check.text.lower():
+        # 3. Check main event list page for Sold Out label
+        event_list_check = requests.get(MAIN_EVENTS_PAGE, timeout=10)
+        if "sold out" in event_list_check.text.lower():
             return False
 
-        # 5. Ghost ticket filter:
-        # Look for actual sections/prices and ensure they're not marked unavailable
-        # Many eticketing systems wrap active prices in <span> or <a> tags
-        price_elements = soup.find_all(string=lambda text: "£" in text)
-        section_links = soup.find_all("a", href=True)
-
-        # Filter: must have price and section link (indicating selectable seat)
-        if price_elements and section_links:
-            # Extra filter: ignore links with disabled/unavailable markers
-            if not any("unavailable" in link.get("class", []) for link in section_links):
-                return True
+        # 4. Smarter ticket availability detection
+        if "choose your seat" in page_text or "select your seat" in page_text:
+            return True
+        if "£" in page_text and "sold out" not in page_text:
+            return True
 
         return False
 
@@ -65,10 +58,14 @@ def check_tickets():
     available = tickets_are_available()
 
     if available and not previously_available:
-        send_telegram_message(f"🎟 Everton v Brighton resale tickets are AVAILABLE!\n👉 {EVENT_PAGE}")
-        print("Alert sent: tickets available.")
+        send_telegram_message(
+            f"🎟 Everton v Brighton resale tickets may be available now!\n👉 {EVENT_PAGE}"
+        )
+        print("✅ Notification sent.")
     elif not available:
-        print("No tickets available.")
+        print("❌ No tickets available.")
+    else:
+        print("🔁 Still available (no repeat alert sent).")
 
     previously_available = available
 
