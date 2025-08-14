@@ -1,87 +1,86 @@
-import time
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
-import pytz
-import logging
+import time
 import os
-import telegram
+from datetime import datetime, timedelta
+import pytz
 
-# ----------------------
-# CONFIGURATION
-# ----------------------
+# Telegram setup
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-URL = 'https://tickets.evertonfc.com/en-GB/categories/resale'
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+# Ticket URLs
+EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1205"
+SOLD_OUT_REDIRECT = "https://www.eticketing.co.uk/evertonfc/EDP/Validation/EventNotAllowed?eventId=1205&reason=EventNoAvailableSalesModesOrSoldOut"
+MAIN_EVENTS_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event"
 
-# Heartbeat interval in seconds (e.g. every 5 minutes)
-HEARTBEAT_INTERVAL = 5 * 60
+# State tracking
+previously_available = False
+last_heartbeat = datetime.now(pytz.timezone("Europe/London"))
 
-# Delay between ticket checks in seconds
-CHECK_INTERVAL = 60
-
-# ----------------------
-# INITIALISE
-# ----------------------
-
-bot = telegram.Bot(token=TELEGRAM_TOKEN)
-last_heartbeat = time.time()
-
-logging.basicConfig(level=logging.INFO)
-london_tz = pytz.timezone("Europe/London")
-
-def send_telegram_message(message: str):
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": message}
     try:
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-        logging.info(f"Sent message: {message}")
+        requests.post(url, data=payload)
     except Exception as e:
-        logging.error(f"Failed to send message: {e}")
+        print("Failed to send Telegram message:", e)
 
-def get_ticket_page_html():
+def tickets_are_available():
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0'
-        }
-        response = requests.get(URL, headers=headers, timeout=10)
-        response.raise_for_status()
-        return response.text
+        r = requests.get(EVENT_PAGE, timeout=10, allow_redirects=True)
+
+        if SOLD_OUT_REDIRECT in r.url:
+            return False
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        page_text = soup.get_text(separator=" ").lower()
+
+        if "no seats available" in page_text:
+            return False
+
+        list_check = requests.get(MAIN_EVENTS_PAGE, timeout=10)
+        if "sold out" in list_check.text.lower():
+            return False
+
+        price_elements = soup.find_all(string=lambda text: "£" in text)
+        section_links = soup.find_all("a", href=True)
+        if price_elements and section_links:
+            if not any("unavailable" in link.get("class", []) for link in section_links):
+                return True
+
+        return False
+
     except Exception as e:
-        logging.error(f"Error fetching ticket page: {e}")
-        return None
+        send_telegram_message(f"⚠️ Error during ticket check:\n{str(e)}")
+        return False
 
-def check_for_tickets(html: str):
-    soup = BeautifulSoup(html, 'html.parser')
-    listings = soup.find_all('a', class_='resale-event-item')
-    return len(listings) > 0
+def get_bst_time():
+    return datetime.now(pytz.timezone("Europe/London")).strftime('%Y-%m-%d %H:%M:%S')
 
-# ----------------------
-# START BOT
-# ----------------------
+def check_tickets():
+    global previously_available, last_heartbeat
+    bst_now = datetime.now(pytz.timezone("Europe/London"))
 
+    available = tickets_are_available()
+
+    if available and not previously_available:
+        send_telegram_message(f"🎟 Everton v Brighton resale tickets are AVAILABLE!\n👉 {EVENT_PAGE}")
+        print(f"{get_bst_time()} | Tickets available! Alert sent.")
+    elif not available:
+        print(f"{get_bst_time()} | No tickets available.")
+
+    previously_available = available
+
+    # Send heartbeat every 60 minutes
+    if (bst_now - last_heartbeat) >= timedelta(minutes=60):
+        send_telegram_message(f"✅ Bot heartbeat: still running @ {get_bst_time()}")
+        last_heartbeat = bst_now
+
+# Start message
 send_telegram_message("🤖 Bot started and monitoring ticket availability...")
 
+# Main loop
 while True:
-    try:
-        html = get_ticket_page_html()
-        if html:
-            if check_for_tickets(html):
-                london_time = datetime.now(london_tz).strftime('%Y-%m-%d %H:%M:%S')
-                send_telegram_message(f"🎟️ Tickets found! Go now: {URL}\n🕒 {london_time}")
-            else:
-                logging.info("No tickets found.")
-        else:
-            logging.warning("No HTML returned from ticket site.")
-
-        # Send heartbeat if interval exceeded
-        current_time = time.time()
-        if current_time - last_heartbeat > HEARTBEAT_INTERVAL:
-            london_time = datetime.now(london_tz).strftime('%Y-%m-%d %H:%M:%S')
-            send_telegram_message(f"✅ Bot heartbeat: still running @ {london_time}")
-            last_heartbeat = current_time
-
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        send_telegram_message(f"⚠️ Bot error: {e}")
-
-    time.sleep(CHECK_INTERVAL)
+    check_tickets()
+    time.sleep(60)
