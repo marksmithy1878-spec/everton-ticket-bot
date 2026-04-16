@@ -5,18 +5,17 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
-from bs4 import BeautifulSoup
 
 LONDON = ZoneInfo("Europe/London")
 
-FIXTURES_PAGE = "https://www.eticketing.co.uk/evertonfc/Events?preFilter=1&preFilterName=Home+Fixtures"
-MATCH_LINK = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
+EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
+SEATMAP_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280?position=5#"
 
 CHECK_EVERY_SECONDS = 30
 HEARTBEAT_EVERY_MINUTES = 30
 REALERT_EVERY_MINUTES = 2
 
-# Only heartbeats muted overnight
+# Heartbeats only muted overnight
 HEARTBEAT_QUIET_START_HOUR = 0
 HEARTBEAT_QUIET_END_HOUR = 6
 
@@ -77,78 +76,58 @@ def telegram_send(text: str, force: bool = False) -> None:
         log(f"Telegram send failed: {e}")
 
 
-def fetch(url: str):
+def fetch(url: str, referer: str | None = None):
+    headers = {}
+    if referer:
+        headers["Referer"] = referer
+
     for attempt in range(3):
         try:
-            r = SESSION.get(url, timeout=15)
-            return r.text
+            r = SESSION.get(url, headers=headers, timeout=15, allow_redirects=True)
+            return r.url, r.text
         except Exception as e:
             log(f"Fetch error {attempt + 1}/3 for {url}: {e}")
             time.sleep(1 + attempt)
-    return None
+
+    return None, None
 
 
-def get_liverpool_card_status() -> str:
+def seatmap_available() -> bool:
     """
-    Returns:
-    - 'sold_out'
-    - 'see_availability'
-    - 'unknown'
-    - 'not_found'
+    Your chosen rule:
+    - If Liverpool event/seatmap flow is blocked or says unavailable -> False
+    - If seatmap page loads without blocked wording -> True
     """
 
-    html = fetch(FIXTURES_PAGE)
+    final_url, html = fetch(SEATMAP_PAGE, referer=EVENT_PAGE)
     if not html:
-        log("Fixtures page returned no HTML")
-        return "unknown"
-
-    soup = BeautifulSoup(html, "lxml")
-
-    # Flexible match: any text node containing both Everton and Liverpool
-    match_text_node = soup.find(
-        string=lambda s: s
-        and "everton" in s.lower()
-        and "liverpool" in s.lower()
-    )
-
-    if not match_text_node:
-        log("Could not find Everton/Liverpool text on fixtures page")
-        return "not_found"
-
-    current = match_text_node.parent
-
-    for _ in range(10):
-        if current is None:
-            break
-
-        text = current.get_text(" ", strip=True).lower()
-
-        # Keep this tight so we do not accidentally inspect other fixture cards
-        if len(text) <= 1200:
-            if "sold out" in text:
-                log("Liverpool card says SOLD OUT")
-                return "sold_out"
-
-            if "see availability" in text:
-                log("Liverpool card says SEE AVAILABILITY")
-                return "see_availability"
-
-        current = current.parent
-
-    log("Found Liverpool fixture but could not isolate card status")
-    return "unknown"
-
-
-def tickets_available() -> bool:
-    status = get_liverpool_card_status()
-
-    if status == "sold_out":
+        log("Seat map returned no HTML")
         return False
 
-    if status == "see_availability":
-        return True
+    lower_url = (final_url or "").lower()
+    lower_html = html.lower()
 
-    return False
+    # Explicit blocked / sold-out states
+    if "eventnotallowed" in lower_url:
+        log("Seat map redirected to EventNotAllowed")
+        return False
+
+    unavailable_phrases = [
+        "this event currently has no seats available",
+        "no seats available",
+        "sold out",
+        "no longer available",
+        "eventnotallowed",
+        "eventnoavailablesalesmodesorsoldout",
+    ]
+
+    if any(phrase in lower_html for phrase in unavailable_phrases):
+        log("Seat map page contains unavailable wording")
+        return False
+
+    # Otherwise, if the seatmap page is loading, treat as available
+    log("Seat map page loaded without unavailable wording - treating as AVAILABLE")
+    return True
 
 
 def maybe_send_heartbeat() -> None:
@@ -175,7 +154,7 @@ def maybe_send_ticket_alert() -> None:
 
     if last_ticket_alert_sent is None:
         telegram_send(
-            f"🎟 Everton v Liverpool now shows SEE AVAILABILITY.\n👉 {MATCH_LINK}",
+            f"🎟 Everton v Liverpool seat map appears available now.\n👉 {SEATMAP_PAGE}",
             force=True,
         )
         last_ticket_alert_sent = now
@@ -183,7 +162,7 @@ def maybe_send_ticket_alert() -> None:
 
     if now - last_ticket_alert_sent >= timedelta(minutes=REALERT_EVERY_MINUTES):
         telegram_send(
-            f"🎟 Everton v Liverpool still shows SEE AVAILABILITY.\n👉 {MATCH_LINK}",
+            f"🎟 Everton v Liverpool seat map still appears available.\n👉 {SEATMAP_PAGE}",
             force=True,
         )
         last_ticket_alert_sent = now
@@ -204,7 +183,7 @@ def main() -> None:
     while True:
         try:
             log("LOOP RUNNING")
-            available = tickets_available()
+            available = seatmap_available()
 
             if available:
                 maybe_send_ticket_alert()
