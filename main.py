@@ -8,14 +8,13 @@ import requests
 
 LONDON = ZoneInfo("Europe/London")
 
-EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
 SEATMAP_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280?position=5#"
 
 CHECK_EVERY_SECONDS = 30
 HEARTBEAT_EVERY_MINUTES = 30
 REALERT_EVERY_MINUTES = 2
 
-# Heartbeats only muted overnight
+# Only heartbeats muted overnight
 HEARTBEAT_QUIET_START_HOUR = 0
 HEARTBEAT_QUIET_END_HOUR = 6
 
@@ -76,58 +75,43 @@ def telegram_send(text: str, force: bool = False) -> None:
         log(f"Telegram send failed: {e}")
 
 
-def fetch(url: str, referer: str | None = None):
-    headers = {}
-    if referer:
-        headers["Referer"] = referer
-
-    for attempt in range(3):
-        try:
-            r = SESSION.get(url, headers=headers, timeout=15, allow_redirects=True)
-            return r.url, r.text
-        except Exception as e:
-            log(f"Fetch error {attempt + 1}/3 for {url}: {e}")
-            time.sleep(1 + attempt)
-
-    return None, None
-
-
 def seatmap_available() -> bool:
     """
     Your chosen rule:
-    - If Liverpool event/seatmap flow is blocked or says unavailable -> False
-    - If seatmap page loads without blocked wording -> True
+    - check the seat map page directly
+    - if URL or page text says unavailable -> False
+    - otherwise -> True
     """
+    try:
+        r = SESSION.get(SEATMAP_PAGE, timeout=15, allow_redirects=True)
+        final_url = r.url.lower()
+        text = r.text.lower()
 
-    final_url, html = fetch(SEATMAP_PAGE, referer=EVENT_PAGE)
-    if not html:
-        log("Seat map returned no HTML")
+        log(f"Final URL: {final_url}")
+
+        unavailable_phrases = [
+            "eventnotallowed",
+            "eventnoavailablesalesmodesorsoldout",
+            "this event currently has no seats available",
+            "no seats available",
+            "sold out",
+            "no longer available",
+        ]
+
+        if any(phrase in final_url for phrase in unavailable_phrases):
+            log("Final URL indicates unavailable")
+            return False
+
+        if any(phrase in text for phrase in unavailable_phrases):
+            log("Page text indicates unavailable")
+            return False
+
+        log("Seat map page does not show unavailable wording - treating as AVAILABLE")
+        return True
+
+    except Exception as e:
+        log(f"Seat map check failed: {e}")
         return False
-
-    lower_url = (final_url or "").lower()
-    lower_html = html.lower()
-
-    # Explicit blocked / sold-out states
-    if "eventnotallowed" in lower_url:
-        log("Seat map redirected to EventNotAllowed")
-        return False
-
-    unavailable_phrases = [
-        "this event currently has no seats available",
-        "no seats available",
-        "sold out",
-        "no longer available",
-        "eventnotallowed",
-        "eventnoavailablesalesmodesorsoldout",
-    ]
-
-    if any(phrase in lower_html for phrase in unavailable_phrases):
-        log("Seat map page contains unavailable wording")
-        return False
-
-    # Otherwise, if the seatmap page is loading, treat as available
-    log("Seat map page loaded without unavailable wording - treating as AVAILABLE")
-    return True
 
 
 def maybe_send_heartbeat() -> None:
