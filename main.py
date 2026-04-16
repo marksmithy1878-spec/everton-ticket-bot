@@ -10,13 +10,16 @@ from bs4 import BeautifulSoup
 LONDON = ZoneInfo("Europe/London")
 
 # Everton v Liverpool
+EVENT_NAME = "everton vs liverpool"
 EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
 SEATMAP_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280?position=5#"
+MAIN_EVENTS_PAGE = "https://www.eticketing.co.uk/evertonfc/Events?preFilter=1&preFilterName=Home+Fixtures"
 
 CHECK_EVERY_SECONDS = 30
 HEARTBEAT_EVERY_MINUTES = 30
+REALERT_EVERY_MINUTES = 2
 
-# Quiet hours for heartbeat only
+# Heartbeats only muted overnight
 HEARTBEAT_QUIET_START_HOUR = 0
 HEARTBEAT_QUIET_END_HOUR = 6
 
@@ -37,6 +40,7 @@ SESSION.headers.update({
 
 previously_available = False
 last_heartbeat_sent = None
+last_ticket_alert_sent = None
 
 
 def log(message: str) -> None:
@@ -60,7 +64,6 @@ def telegram_send(text: str, force: bool = False) -> None:
 
     now = london_now()
 
-    # suppress heartbeats overnight, but not ticket alerts
     if not force and in_heartbeat_quiet_hours(now):
         log(f"Heartbeat suppressed overnight: {text}")
         return
@@ -93,17 +96,23 @@ def fetch(url: str, referer: str | None = None):
     return None, None
 
 
-def page_indicates_unavailable(text: str, final_url: str | None) -> bool:
-    lower = text.lower()
+def main_page_says_sold_out() -> bool:
+    """
+    Checks the MAIN_EVENTS_PAGE specifically for the Everton vs Liverpool card.
+    If that card says SOLD OUT, treat the match as unavailable.
+    """
+    _, html = fetch(MAIN_EVENTS_PAGE)
+    if not html:
+        log("Main events page returned no HTML")
+        return False
 
-    # Redirected sold-out state
-    if final_url and "EventNotAllowed" in final_url:
-        return True
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text(" ", strip=True).lower()
 
-    # Known unavailable wording
-    unavailable_phrases = [
-        "this event currently has no seats available",
-        "no seats available",
+    idx = text.find(EVENT_NAME)
+    if idx == -1:
+        log("Could not find Everton vs Liverpool on main events page")
+        return False        "no seats available",
         "sold out",
         "no longer available",
         "eventnotallowedsoldout",
