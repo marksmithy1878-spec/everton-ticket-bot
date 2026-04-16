@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 
 LONDON = ZoneInfo("Europe/London")
 
-# Everton v Liverpool
 EVENT_NAME = "everton vs liverpool"
 EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
 SEATMAP_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280?position=5#"
@@ -112,80 +111,68 @@ def main_page_says_sold_out() -> bool:
     idx = text.find(EVENT_NAME)
     if idx == -1:
         log("Could not find Everton vs Liverpool on main events page")
-        return False        "no seats available",
+        return False
+
+    window = text[idx:idx + 500]
+
+    if "sold out" in window:
+        log("Main events page says SOLD OUT for Everton vs Liverpool")
+        return True
+
+    log("Main events page does not say SOLD OUT for Everton vs Liverpool")
+    return False
+
+
+def page_indicates_unavailable(text: str, final_url: str | None) -> bool:
+    lower = text.lower()
+
+    if final_url and "EventNotAllowed" in final_url:
+        return True
+
+    unavailable_phrases = [
+        "this event currently has no seats available",
+        "no seats available",
         "sold out",
         "no longer available",
-        "eventnotallowedsoldout",
+        "eventnotallowed",
         "eventnoavailablesalesmodesorsoldout",
+    ]
 
     return any(phrase in lower for phrase in unavailable_phrases)
 
 
-def page_indicates_available(text: str) -> bool:
-    lower = text.lower()
-
-    positive_phrases = [
-        "section overview",
-        "lowest price",
-        "currently viewing",
-        "compare seats",
-        "select your view",
-        "select your level",
-        "all tiers",
-        "lower tier",
-        "qty",
-        "price",
-        "find/buy tickets",
-    ]
-
-    has_positive_phrase = any(phrase in lower for phrase in positive_phrases)
-    has_price_symbol = "£" in text or "gbp" in lower
-
-    # More generous than before: either strong seat-map wording,
-    # or price + ticketing UI wording.
-    if has_positive_phrase:
-        return True
-
-    if has_price_symbol and ("section" in lower or "tickets" in lower or "price" in lower):
-        return True
-
-    return False
-
-
 def tickets_available() -> bool:
-    # First check event page
+    # Strongest signal first: main fixtures page
+    if main_page_says_sold_out():
+        return False
+
+    # Event page
     event_final_url, event_html = fetch(EVENT_PAGE)
     if not event_html:
         log("Event page returned no HTML")
         return False
 
     event_soup = BeautifulSoup(event_html, "lxml")
-    event_text = event_soup.get_text(" ")
+    event_text = event_soup.get_text(" ", strip=True)
 
     if page_indicates_unavailable(event_text, event_final_url):
         log("Event page indicates unavailable")
         return False
 
-    # Then check seat map page
+    # Seat map page
     seat_final_url, seat_html = fetch(SEATMAP_PAGE, referer=EVENT_PAGE)
     if not seat_html:
         log("Seat map page returned no HTML")
         return False
 
     seat_soup = BeautifulSoup(seat_html, "lxml")
-    seat_text = seat_soup.get_text(" ")
+    seat_text = seat_soup.get_text(" ", strip=True)
 
     if page_indicates_unavailable(seat_text, seat_final_url):
         log("Seat map page indicates unavailable")
         return False
 
-    if page_indicates_available(seat_text):
-        log("Seat map page indicates AVAILABLE")
-        return True
-
-    # If we reached the seat-map page successfully and did not hit an unavailable state,
-    # treat that as available. This is intentionally more sensitive so we do not miss tickets.
-    log("Seat map page accessible with no unavailable wording — treating as AVAILABLE")
+    log("Seat map accessible and no unavailable wording found — treating as AVAILABLE")
     return True
 
 
@@ -206,8 +193,29 @@ def maybe_send_heartbeat() -> None:
         last_heartbeat_sent = now
 
 
+def maybe_send_ticket_alert() -> None:
+    global last_ticket_alert_sent
+
+    now = london_now()
+
+    if last_ticket_alert_sent is None:
+        telegram_send(
+            f"🎟 Everton v Liverpool resale ticket may be available now!\n👉 {SEATMAP_PAGE}",
+            force=True,
+        )
+        last_ticket_alert_sent = now
+        return
+
+    if now - last_ticket_alert_sent >= timedelta(minutes=REALERT_EVERY_MINUTES):
+        telegram_send(
+            f"🎟 Everton v Liverpool resale still appears available!\n👉 {SEATMAP_PAGE}",
+            force=True,
+        )
+        last_ticket_alert_sent = now
+
+
 def main() -> None:
-    global previously_available, last_heartbeat_sent
+    global previously_available, last_heartbeat_sent, last_ticket_alert_sent
 
     log("SCRIPT STARTED")
     start_time = london_now()
@@ -223,18 +231,18 @@ def main() -> None:
             log("LOOP RUNNING")
             available = tickets_available()
 
-            if available and not previously_available:
-                telegram_send(
-                    f"🎟 Everton v Liverpool resale ticket may be available now!\n👉 {SEATMAP_PAGE}",
-                    force=True,
-                )
-                log("Availability flipped to TRUE")
-
-            elif not available and previously_available:
-                log("Availability flipped to FALSE")
-
+            if available:
+                maybe_send_ticket_alert()
+                if not previously_available:
+                    log("Availability flipped to TRUE")
+                else:
+                    log("Still available")
             else:
-                log(f"No change. Available = {available}")
+                if previously_available:
+                    log("Availability flipped to FALSE")
+                else:
+                    log("No change. Available = False")
+                last_ticket_alert_sent = None
 
             previously_available = available
             maybe_send_heartbeat()
