@@ -117,7 +117,6 @@ def main_page_says_sold_out() -> bool:
         "no longer available",
         "eventnotallowedsoldout",
         "eventnoavailablesalesmodesorsoldout",
-    ]
 
     return any(phrase in lower for phrase in unavailable_phrases)
 
