@@ -10,14 +10,14 @@ from bs4 import BeautifulSoup
 LONDON = ZoneInfo("Europe/London")
 
 EVENT_NAME = "everton vs liverpool"
-MAIN_EVENTS_PAGE = "https://www.eticketing.co.uk/evertonfc/Events?preFilter=1&preFilterName=Home+Fixtures"
+FIXTURES_PAGE = "https://www.eticketing.co.uk/evertonfc/Events?preFilter=1&preFilterName=Home+Fixtures"
 MATCH_LINK = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
 
 CHECK_EVERY_SECONDS = 30
 HEARTBEAT_EVERY_MINUTES = 30
 REALERT_EVERY_MINUTES = 2
 
-# Only heartbeats are muted overnight
+# Only heartbeats muted overnight
 HEARTBEAT_QUIET_START_HOUR = 0
 HEARTBEAT_QUIET_END_HOUR = 6
 
@@ -89,41 +89,65 @@ def fetch(url: str):
     return None
 
 
-def liverpool_card_text() -> str | None:
-    html = fetch(MAIN_EVENTS_PAGE)
+def get_liverpool_card_status() -> str:
+    """
+    Returns one of:
+    - 'sold_out'
+    - 'see_availability'
+    - 'unknown'
+    - 'not_found'
+    """
+
+    html = fetch(FIXTURES_PAGE)
     if not html:
-        log("Main events page returned no HTML")
-        return None
+        log("Fixtures page returned no HTML")
+        return "unknown"
 
     soup = BeautifulSoup(html, "lxml")
-    text = soup.get_text(" ", strip=True).lower()
 
-    idx = text.find(EVENT_NAME)
-    if idx == -1:
-        log("Could not find Everton vs Liverpool on fixtures page")
-        return None
+    # Find the exact text node containing Everton vs Liverpool
+    match_text_node = soup.find(string=lambda s: s and EVENT_NAME in s.strip().lower())
 
-    # Grab only the nearby text around the Liverpool card
-    window = text[idx:idx + 800]
-    return window
+    if not match_text_node:
+        log("Could not find Everton vs Liverpool text on fixtures page")
+        return "not_found"
+
+    # Start from the matching node’s parent and walk up the DOM,
+    # looking for the nearest container that contains SOLD OUT or SEE AVAILABILITY.
+    current = match_text_node.parent
+
+    for depth in range(8):
+        if current is None:
+            break
+
+        text = current.get_text(" ", strip=True).lower()
+
+        # Keep this bounded so we don't accidentally grab the whole page
+        if len(text) <= 1200:
+            if "sold out" in text:
+                log("Liverpool card says SOLD OUT")
+                return "sold_out"
+
+            if "see availability" in text:
+                log("Liverpool card says SEE AVAILABILITY")
+                return "see_availability"
+
+        current = current.parent
+
+    log("Found Liverpool fixture but could not isolate card status")
+    return "unknown"
 
 
 def tickets_available() -> bool:
-    card = liverpool_card_text()
-    if not card:
+    status = get_liverpool_card_status()
+
+    if status == "sold_out":
         return False
 
-    if "sold out" in card:
-        log("Liverpool card says SOLD OUT")
-        return False
-
-    if "see availability" in card:
-        log("Liverpool card says SEE AVAILABILITY")
+    if status == "see_availability":
         return True
 
-    # Fallback: if it no longer says sold out but also doesn't clearly say see availability,
-    # treat as unavailable rather than false alerting.
-    log("Liverpool card unclear - treating as unavailable")
+    # If unclear, do NOT alert
     return False
 
 
