@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 
 LONDON = ZoneInfo("Europe/London")
 
-EVENT_NAME = "everton vs liverpool"
 FIXTURES_PAGE = "https://www.eticketing.co.uk/evertonfc/Events?preFilter=1&preFilterName=Home+Fixtures"
 MATCH_LINK = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
 
@@ -91,7 +90,7 @@ def fetch(url: str):
 
 def get_liverpool_card_status() -> str:
     """
-    Returns one of:
+    Returns:
     - 'sold_out'
     - 'see_availability'
     - 'unknown'
@@ -105,24 +104,26 @@ def get_liverpool_card_status() -> str:
 
     soup = BeautifulSoup(html, "lxml")
 
-    # Find the exact text node containing Everton vs Liverpool
-    match_text_node = soup.find(string=lambda s: s and EVENT_NAME in s.strip().lower())
+    # Flexible match: any text node containing both Everton and Liverpool
+    match_text_node = soup.find(
+        string=lambda s: s
+        and "everton" in s.lower()
+        and "liverpool" in s.lower()
+    )
 
     if not match_text_node:
-        log("Could not find Everton vs Liverpool text on fixtures page")
+        log("Could not find Everton/Liverpool text on fixtures page")
         return "not_found"
 
-    # Start from the matching node’s parent and walk up the DOM,
-    # looking for the nearest container that contains SOLD OUT or SEE AVAILABILITY.
     current = match_text_node.parent
 
-    for depth in range(8):
+    for _ in range(10):
         if current is None:
             break
 
         text = current.get_text(" ", strip=True).lower()
 
-        # Keep this bounded so we don't accidentally grab the whole page
+        # Keep this tight so we do not accidentally inspect other fixture cards
         if len(text) <= 1200:
             if "sold out" in text:
                 log("Liverpool card says SOLD OUT")
@@ -147,7 +148,6 @@ def tickets_available() -> bool:
     if status == "see_availability":
         return True
 
-    # If unclear, do NOT alert
     return False
 
 
