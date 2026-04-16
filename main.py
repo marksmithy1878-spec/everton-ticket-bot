@@ -10,15 +10,14 @@ from bs4 import BeautifulSoup
 LONDON = ZoneInfo("Europe/London")
 
 EVENT_NAME = "everton vs liverpool"
-EVENT_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
-SEATMAP_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280?position=5#"
 MAIN_EVENTS_PAGE = "https://www.eticketing.co.uk/evertonfc/Events?preFilter=1&preFilterName=Home+Fixtures"
+MATCH_LINK = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280"
 
 CHECK_EVERY_SECONDS = 30
 HEARTBEAT_EVERY_MINUTES = 30
 REALERT_EVERY_MINUTES = 2
 
-# Heartbeats only muted overnight
+# Only heartbeats are muted overnight
 HEARTBEAT_QUIET_START_HOUR = 0
 HEARTBEAT_QUIET_END_HOUR = 6
 
@@ -79,101 +78,53 @@ def telegram_send(text: str, force: bool = False) -> None:
         log(f"Telegram send failed: {e}")
 
 
-def fetch(url: str, referer: str | None = None):
-    headers = {}
-    if referer:
-        headers["Referer"] = referer
-
+def fetch(url: str):
     for attempt in range(3):
         try:
-            r = SESSION.get(url, headers=headers, timeout=15, allow_redirects=True)
-            return r.url, r.text
+            r = SESSION.get(url, timeout=15)
+            return r.text
         except Exception as e:
             log(f"Fetch error {attempt + 1}/3 for {url}: {e}")
             time.sleep(1 + attempt)
+    return None
 
-    return None, None
 
-
-def main_page_says_sold_out() -> bool:
-    """
-    Checks the MAIN_EVENTS_PAGE specifically for the Everton vs Liverpool card.
-    If that card says SOLD OUT, treat the match as unavailable.
-    """
-    _, html = fetch(MAIN_EVENTS_PAGE)
+def liverpool_card_text() -> str | None:
+    html = fetch(MAIN_EVENTS_PAGE)
     if not html:
         log("Main events page returned no HTML")
-        return False
+        return None
 
     soup = BeautifulSoup(html, "lxml")
     text = soup.get_text(" ", strip=True).lower()
 
     idx = text.find(EVENT_NAME)
     if idx == -1:
-        log("Could not find Everton vs Liverpool on main events page")
-        return False
+        log("Could not find Everton vs Liverpool on fixtures page")
+        return None
 
-    window = text[idx:idx + 500]
-
-    if "sold out" in window:
-        log("Main events page says SOLD OUT for Everton vs Liverpool")
-        return True
-
-    log("Main events page does not say SOLD OUT for Everton vs Liverpool")
-    return False
-
-
-def page_indicates_unavailable(text: str, final_url: str | None) -> bool:
-    lower = text.lower()
-
-    if final_url and "EventNotAllowed" in final_url:
-        return True
-
-    unavailable_phrases = [
-        "this event currently has no seats available",
-        "no seats available",
-        "sold out",
-        "no longer available",
-        "eventnotallowed",
-        "eventnoavailablesalesmodesorsoldout",
-    ]
-
-    return any(phrase in lower for phrase in unavailable_phrases)
+    # Grab only the nearby text around the Liverpool card
+    window = text[idx:idx + 800]
+    return window
 
 
 def tickets_available() -> bool:
-    # Strongest signal first: main fixtures page
-    if main_page_says_sold_out():
+    card = liverpool_card_text()
+    if not card:
         return False
 
-    # Event page
-    event_final_url, event_html = fetch(EVENT_PAGE)
-    if not event_html:
-        log("Event page returned no HTML")
+    if "sold out" in card:
+        log("Liverpool card says SOLD OUT")
         return False
 
-    event_soup = BeautifulSoup(event_html, "lxml")
-    event_text = event_soup.get_text(" ", strip=True)
+    if "see availability" in card:
+        log("Liverpool card says SEE AVAILABILITY")
+        return True
 
-    if page_indicates_unavailable(event_text, event_final_url):
-        log("Event page indicates unavailable")
-        return False
-
-    # Seat map page
-    seat_final_url, seat_html = fetch(SEATMAP_PAGE, referer=EVENT_PAGE)
-    if not seat_html:
-        log("Seat map page returned no HTML")
-        return False
-
-    seat_soup = BeautifulSoup(seat_html, "lxml")
-    seat_text = seat_soup.get_text(" ", strip=True)
-
-    if page_indicates_unavailable(seat_text, seat_final_url):
-        log("Seat map page indicates unavailable")
-        return False
-
-    log("Seat map accessible and no unavailable wording found — treating as AVAILABLE")
-    return True
+    # Fallback: if it no longer says sold out but also doesn't clearly say see availability,
+    # treat as unavailable rather than false alerting.
+    log("Liverpool card unclear - treating as unavailable")
+    return False
 
 
 def maybe_send_heartbeat() -> None:
@@ -200,7 +151,7 @@ def maybe_send_ticket_alert() -> None:
 
     if last_ticket_alert_sent is None:
         telegram_send(
-            f"🎟 Everton v Liverpool resale ticket may be available now!\n👉 {SEATMAP_PAGE}",
+            f"🎟 Everton v Liverpool now shows SEE AVAILABILITY.\n👉 {MATCH_LINK}",
             force=True,
         )
         last_ticket_alert_sent = now
@@ -208,7 +159,7 @@ def maybe_send_ticket_alert() -> None:
 
     if now - last_ticket_alert_sent >= timedelta(minutes=REALERT_EVERY_MINUTES):
         telegram_send(
-            f"🎟 Everton v Liverpool resale still appears available!\n👉 {SEATMAP_PAGE}",
+            f"🎟 Everton v Liverpool still shows SEE AVAILABILITY.\n👉 {MATCH_LINK}",
             force=True,
         )
         last_ticket_alert_sent = now
