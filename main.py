@@ -8,7 +8,16 @@ import requests
 
 LONDON = ZoneInfo("Europe/London")
 
-SEATMAP_PAGE = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280?position=5#"
+AREA_AVAILABILITY_URL = (
+    "https://www.eticketing.co.uk/evertonfc/EDP/Ism/AreaAvailability"
+    "?excludeTxSeats=False"
+    "&excludePtxSeats=True"
+    "&eventId=1280"
+    "&includeAtxSeats=false"
+    "&showHospitality=false"
+)
+
+MATCH_LINK = "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280?position=5#"
 
 CHECK_EVERY_SECONDS = 30
 HEARTBEAT_EVERY_MINUTES = 30
@@ -28,9 +37,11 @@ SESSION.headers.update({
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/135.0 Safari/537.36"
     ),
+    "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-GB,en;q=0.9",
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
+    "Referer": "https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/1280",
 })
 
 previously_available = False
@@ -75,43 +86,44 @@ def telegram_send(text: str, force: bool = False) -> None:
         log(f"Telegram send failed: {e}")
 
 
-def seatmap_available() -> bool:
-    """
-    Your chosen rule:
-    - check the seat map page directly
-    - if URL or page text says unavailable -> False
-    - otherwise -> True
-    """
-    try:
-        r = SESSION.get(SEATMAP_PAGE, timeout=15, allow_redirects=True)
-        final_url = r.url.lower()
-        text = r.text.lower()
+def fetch_area_availability():
+    for attempt in range(3):
+        try:
+            r = SESSION.get(AREA_AVAILABILITY_URL, timeout=15)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            log(f"AreaAvailability fetch error {attempt + 1}/3: {e}")
+            time.sleep(1 + attempt)
 
-        log(f"Final URL: {final_url}")
+    return None
 
-        unavailable_phrases = [
-            "eventnotallowed",
-            "eventnoavailablesalesmodesorsoldout",
-            "this event currently has no seats available",
-            "no seats available",
-            "sold out",
-            "no longer available",
-        ]
 
-        if any(phrase in final_url for phrase in unavailable_phrases):
-            log("Final URL indicates unavailable")
-            return False
+def total_available_seats() -> int:
+    data = fetch_area_availability()
+    if data is None:
+        log("AreaAvailability returned no data")
+        return 0
 
-        if any(phrase in text for phrase in unavailable_phrases):
-            log("Page text indicates unavailable")
-            return False
+    if not isinstance(data, list):
+        log(f"Unexpected AreaAvailability format: {type(data)}")
+        return 0
 
-        log("Seat map page does not show unavailable wording - treating as AVAILABLE")
-        return True
+    total = 0
 
-    except Exception as e:
-        log(f"Seat map check failed: {e}")
-        return False
+    for area in data:
+        try:
+            total += int(area.get("AvailableSeats", 0))
+        except Exception:
+            pass
+
+    log(f"Total AvailableSeats = {total}")
+    return total
+
+
+def seats_available() -> bool:
+    total = total_available_seats()
+    return total > 0
 
 
 def maybe_send_heartbeat() -> None:
@@ -131,14 +143,14 @@ def maybe_send_heartbeat() -> None:
         last_heartbeat_sent = now
 
 
-def maybe_send_ticket_alert() -> None:
+def maybe_send_ticket_alert(total: int) -> None:
     global last_ticket_alert_sent
 
     now = london_now()
 
     if last_ticket_alert_sent is None:
         telegram_send(
-            f"🎟 Everton v Liverpool seat map appears available now.\n👉 {SEATMAP_PAGE}",
+            f"🎟 Everton v Liverpool seats available now! Total AvailableSeats = {total}\n👉 {MATCH_LINK}",
             force=True,
         )
         last_ticket_alert_sent = now
@@ -146,7 +158,7 @@ def maybe_send_ticket_alert() -> None:
 
     if now - last_ticket_alert_sent >= timedelta(minutes=REALERT_EVERY_MINUTES):
         telegram_send(
-            f"🎟 Everton v Liverpool seat map still appears available.\n👉 {SEATMAP_PAGE}",
+            f"🎟 Everton v Liverpool still has seats available. Total AvailableSeats = {total}\n👉 {MATCH_LINK}",
             force=True,
         )
         last_ticket_alert_sent = now
@@ -159,7 +171,7 @@ def main() -> None:
     start_time = london_now()
 
     telegram_send(
-        f"🤖 Everton v Liverpool bot started @ {start_time.strftime('%Y-%m-%d %H:%M:%S %Z')}",
+        f"🤖 Everton v Liverpool availability bot started @ {start_time.strftime('%Y-%m-%d %H:%M:%S %Z')}",
         force=True,
     )
     last_heartbeat_sent = start_time
@@ -167,10 +179,11 @@ def main() -> None:
     while True:
         try:
             log("LOOP RUNNING")
-            available = seatmap_available()
+            total = total_available_seats()
+            available = total > 0
 
             if available:
-                maybe_send_ticket_alert()
+                maybe_send_ticket_alert(total)
                 if not previously_available:
                     log("Availability flipped to TRUE")
                 else:
