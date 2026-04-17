@@ -4,7 +4,7 @@ import time
 BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
 CHAT_ID = "YOUR_CHAT_ID"
 
-EVENT_ID = 1280  # change to 1281 for testing
+EVENT_ID = 1280  # Liverpool
 
 URL = f"https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/{EVENT_ID}"
 
@@ -27,24 +27,18 @@ while True:
         r = requests.get(URL, headers=headers, timeout=10)
         html = r.text.lower()
 
-        # SOLD OUT signals
-        sold_out = (
-            "no longer onsale" in html
-            or "sold out" in html
+        # TRUE "no ticket" signal (this is the key)
+        no_tickets = (
+            "no seats available matching your criteria" in html
+            or "0 results" in html
         )
 
-        # AVAILABLE signals (seat map usable)
-        seat_map_active = (
-            "choose your ticket preferences" in html
-            or "qty. of seats" in html
-        )
-
-        available = seat_map_active and not sold_out
+        available = not no_tickets
 
         print("Available:", available)
 
         if available and not last_state:
-            send_telegram("🚨 TICKET WINDOW OPEN – CHECK NOW!")
+            send_telegram("🚨 TICKET FOUND – CHECK NOW!")
             print("ALERT SENT")
 
         last_state = available
