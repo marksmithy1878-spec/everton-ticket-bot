@@ -1,14 +1,19 @@
-import requests
+import os
+import sys
 import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-CHAT_ID = "YOUR_CHAT_ID"
+import requests
 
-EVENT_ID = 1281  # Man City test
+LONDON = ZoneInfo("Europe/London")
+
+# MAN CITY TEST ONLY
+EVENT_ID = 1281
 
 EVENT_URL = f"https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/{EVENT_ID}"
 AREA_URL = (
-    f"https://www.eticketing.co.uk/evertonfc/EDP/Ism/AreaAvailability"
+    "https://www.eticketing.co.uk/evertonfc/EDP/Ism/AreaAvailability"
     f"?excludeTxSeats=False"
     f"&excludePtxSeats=True"
     f"&eventId={EVENT_ID}"
@@ -16,51 +21,234 @@ AREA_URL = (
     f"&showHospitality=false"
 )
 
-session = requests.Session()
+MATCH_LINK = f"https://www.eticketing.co.uk/evertonfc/EDP/Event/Index/{EVENT_ID}?position=5#"
 
-headers = {
-    "User-Agent": "Mozilla/5.0",
+CHECK_EVERY_SECONDS = 30
+HEARTBEAT_EVERY_MINUTES = 30
+REALERT_EVERY_MINUTES = 2
+
+HEARTBEAT_QUIET_START_HOUR = 0
+HEARTBEAT_QUIET_END_HOUR = 6
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+
+SESSION = requests.Session()
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
     "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-GB,en;q=0.9",
     "Referer": EVENT_URL,
+    "Origin": "https://www.eticketing.co.uk",
+    "Connection": "keep-alive",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
-last_state = False
+previously_available = False
+last_heartbeat_sent = None
+last_ticket_alert_sent = None
 
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
 
-while True:
+def log(message: str) -> None:
+    now = datetime.now(LONDON).strftime("%Y-%m-%d %H:%M:%S %Z")
+    print(f"[{now}] {message}", flush=True)
+    sys.stdout.flush()
+
+
+def london_now() -> datetime:
+    return datetime.now(LONDON)
+
+
+def in_heartbeat_quiet_hours(now: datetime) -> bool:
+    return HEARTBEAT_QUIET_START_HOUR <= now.hour < HEARTBEAT_QUIET_END_HOUR
+
+
+def telegram_send(text: str, force: bool = False) -> None:
+    if not TELEGRAM_TOKEN or not CHAT_ID:
+        log("Missing TELEGRAM_TOKEN or CHAT_ID")
+        return
+
+    now = london_now()
+
+    if not force and in_heartbeat_quiet_hours(now):
+        log(f"Heartbeat suppressed overnight: {text}")
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": text}
+
     try:
-        print("Checking Man City test...")
-
-        # 1. Load event page first to establish session/cookies
-        session.get(EVENT_URL, headers=headers, timeout=10)
-
-        # 2. Then call area availability
-        r = session.get(AREA_URL, headers=headers, timeout=10)
-
-        print("Status code:", r.status_code)
-
+        r = requests.post(url, data=payload, timeout=15)
+        log(f"Telegram status {r.status_code}")
         if r.status_code != 200:
-            print("Bad response body:", r.text[:500])
-            time.sleep(10)
+            log(f"Telegram response body: {r.text}")
+    except Exception as e:
+        log(f"Telegram send failed: {e}")
+
+
+def warm_up_session() -> bool:
+    try:
+        home = SESSION.get(
+            "https://www.eticketing.co.uk",
+            headers=HEADERS,
+            timeout=15,
+        )
+        log(f"Homepage warm-up status: {home.status_code}")
+
+        event = SESSION.get(
+            EVENT_URL,
+            headers=HEADERS,
+            timeout=15,
+            allow_redirects=True,
+        )
+        log(f"Event warm-up status: {event.status_code} | Final URL: {event.url}")
+
+        return True
+    except Exception as e:
+        log(f"Session warm-up failed: {e}")
+        return False
+
+
+def fetch_area_availability():
+    if not warm_up_session():
+        return None
+
+    for attempt in range(3):
+        try:
+            r = SESSION.get(
+                AREA_URL,
+                headers=HEADERS,
+                timeout=15,
+            )
+
+            log(f"AreaAvailability status: {r.status_code}")
+
+            if r.status_code == 403:
+                log("403 Forbidden from AreaAvailability")
+                time.sleep(5 + attempt)
+                continue
+
+            r.raise_for_status()
+            return r.json()
+
+        except Exception as e:
+            log(f"AreaAvailability fetch error {attempt + 1}/3: {e}")
+            time.sleep(2 + attempt)
+
+    return None
+
+
+def total_available_seats() -> int:
+    data = fetch_area_availability()
+    if data is None:
+        log("AreaAvailability returned no data")
+        return 0
+
+    if not isinstance(data, list):
+        log(f"Unexpected AreaAvailability format: {type(data)}")
+        return 0
+
+    total = 0
+    non_zero_areas = 0
+
+    for area in data:
+        if not isinstance(area, dict):
+            continue
+        try:
+            seats = int(area.get("AvailableSeats", 0))
+            total += seats
+            if seats > 0:
+                non_zero_areas += 1
+        except Exception:
             continue
 
-        data = r.json()
-        total = sum(area.get("AvailableSeats", 0) for area in data if isinstance(area, dict))
+    log(f"Total AvailableSeats = {total} across {non_zero_areas} non-zero areas")
+    return total
 
-        print("Available seats:", total)
 
-        available = total > 0
+def maybe_send_heartbeat() -> None:
+    global last_heartbeat_sent
 
-        if available and not last_state:
-            send_telegram(f"🚨 MAN CITY TEST: seats available! Total AvailableSeats = {total}")
-            print("ALERT SENT")
+    now = london_now()
 
-        last_state = available
+    if last_heartbeat_sent is None:
+        last_heartbeat_sent = now
+        return
 
-    except Exception as e:
-        print("Error:", e)
+    if now - last_heartbeat_sent >= timedelta(minutes=HEARTBEAT_EVERY_MINUTES):
+        telegram_send(
+            f"✅ Man City test bot heartbeat @ {now.strftime('%Y-%m-%d %H:%M:%S %Z')} (eventId={EVENT_ID})",
+            force=False,
+        )
+        last_heartbeat_sent = now
 
-    time.sleep(10)
+
+def maybe_send_ticket_alert(total: int) -> None:
+    global last_ticket_alert_sent
+
+    now = london_now()
+
+    if last_ticket_alert_sent is None:
+        telegram_send(
+            f"🚨 MAN CITY TEST: seats available! Total AvailableSeats = {total}\n👉 {MATCH_LINK}",
+            force=True,
+        )
+        last_ticket_alert_sent = now
+        return
+
+    if now - last_ticket_alert_sent >= timedelta(minutes=REALERT_EVERY_MINUTES):
+        telegram_send(
+            f"🚨 MAN CITY TEST: seats still available. Total AvailableSeats = {total}\n👉 {MATCH_LINK}",
+            force=True,
+        )
+        last_ticket_alert_sent = now
+
+
+def main() -> None:
+    global previously_available, last_heartbeat_sent, last_ticket_alert_sent
+
+    log("SCRIPT STARTED")
+    start_time = london_now()
+
+    telegram_send(
+        f"🤖 Man City test bot started @ {start_time.strftime('%Y-%m-%d %H:%M:%S %Z')} (eventId={EVENT_ID})",
+        force=True,
+    )
+    last_heartbeat_sent = start_time
+
+    while True:
+        try:
+            log("LOOP RUNNING")
+            total = total_available_seats()
+            available = total > 0
+
+            if available:
+                maybe_send_ticket_alert(total)
+                if not previously_available:
+                    log("Availability flipped to TRUE")
+                else:
+                    log("Still available")
+            else:
+                if previously_available:
+                    log("Availability flipped to FALSE")
+                else:
+                    log("No change. Available = False")
+                last_ticket_alert_sent = None
+
+            previously_available = available
+            maybe_send_heartbeat()
+
+        except Exception as e:
+            log(f"Main loop error: {e}")
+
+        time.sleep(CHECK_EVERY_SECONDS)
+
+
+if __name__ == "__main__":
+    main()
