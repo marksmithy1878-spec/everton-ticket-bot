@@ -1,1 +1,2 @@
-# Standard library only. No third-party packages required.
+# Time zone data for UK GMT/BST support
+tzdata>=2026.6
