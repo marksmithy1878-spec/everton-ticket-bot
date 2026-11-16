@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from ticketbot import EVENT_ID, EVENT_URL, telegram_send
+from ticketbot import EVENT_ID, EVENT_URL, TelegramError, telegram_send
 
 
 def main() -> int:
@@ -10,8 +10,12 @@ def main() -> int:
     parser.add_argument("--telegram-test", action="store_true", help="Send a test Telegram message")
     args = parser.parse_args()
     if args.telegram_test:
-        telegram_send(f"✅ Telegram test for Everton v Liverpool (event {EVENT_ID}).\n"
-                      f"No live availability checked.\n{EVENT_URL}")
+        try:
+            telegram_send(f"✅ Telegram test for Everton v Liverpool (event {EVENT_ID}).\n"
+                          f"No live availability checked.\n{EVENT_URL}")
+        except TelegramError:
+            print("Telegram test failed; message delivery was not confirmed. Check private credentials and connectivity.")
+            return 1
         print("Telegram test sent and confirmed by Telegram API.")
         return 0
     print("NOT RUNNING: no validated, permitted live ticket availability source is configured.")

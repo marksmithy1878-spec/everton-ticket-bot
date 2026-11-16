@@ -9,10 +9,17 @@ Fixture: Everton v Liverpool, 29 November 2026.
 - Telegram test message (credentials from environment variables, checked API response).
 - Safe handling of UNKNOWN/ERROR, AVAILABLE, UNAVAILABLE and POSSIBLE signals.
 - Duplicate prevention with repeat alerts after 30 minutes.
+- Different identified seats can alert immediately; returning to an already alerted seat is suppressed.
+- Telegram failures are caught without marking an alert delivered. Another attempt is allowed
+  after at least one minute, only when a caller supplies current evidence again.
 - Errors produce a warning after 3 consecutive failures, then at most hourly.
 - Routine heartbeats suppressed from midnight until 06:00 UK time; opportunity alerts can fire anytime.
 - Logs in Europe/London time.
 - Automated offline tests for HTTP 403, 404, 540, invalid data, timeouts, false alerts and BST/GMT.
+- `evidence.py` classifies normalized evidence with freshness, fixture and parser-validation checks.
+  Its Python fields are internal types, not claims about Everton's actual response format.
+- `AccessGuard` is a tested circuit-breaker component for a future reader: restrictions latch
+  it closed; transient failures back off. It is not wired to a live source or request loop.
 - Hard stop if someone tries to start it as a live worker.
 
 ## Not ready (critical)
@@ -22,7 +29,12 @@ Fixture: Everton v Liverpool, 29 November 2026.
   and are used ONLY by the offline tests; they must not be treated as real API fields.
 - `totalAvailableSeat` is section-level availability, not proof of resale tickets.
 - This package does **not** poll or interact with the Everton/Ticketmaster website.
-- No live site detection, Render deployment, or production Telegram test has been performed.
+- No live site detection or Render deployment has been performed. Telegram authentication and a
+  real phone delivery were verified by the user before this review; tests in this checkout are mocked.
+- Deduplication and restriction state are currently in memory. Durable state and restart protection
+  must be integrated with a real runner before unattended operation is approved.
+- No polling interval has been demonstrated safe. Moving providers or using an ordinary browser
+  is not proof of permission, reliable access, or protection from restrictions.
 
 ## Test locally
 Python 3.10+:
@@ -42,3 +54,5 @@ Integrate a legitimate, validated read-only resale availability signal if one be
 available, with tests against known AVAILABLE and UNAVAILABLE live examples. Until then
 keep Render suspended and Auto-Deploy Off. A different hosting provider alone does not
 prove website access is permitted or that data is correct.
+
+See [REVIEW.md](REVIEW.md) for the code review, classification rules and proposed browser validation.
