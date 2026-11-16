@@ -56,3 +56,19 @@ keep Render suspended and Auto-Deploy Off. A different hosting provider alone do
 prove website access is permitted or that data is correct.
 
 See [REVIEW.md](REVIEW.md) for the code review, classification rules and proposed browser validation.
+
+## Passive browser diagnostic (development only)
+
+[`browser_probe`](browser_probe/README.md) contains a small Chrome/Edge DevTools
+extension that observes existing availability-request metadata while the user
+leaves the page untouched. It never refreshes, clicks, reads response bodies,
+calls inventory endpoints or sends Telegram messages. It is not a ticket detector.
+
+The diagnostic has 16 passing offline JavaScript tests, including a complete
+panel run against simulated DevTools APIs. It still needs a real trial on the
+user's Windows browser. Install and test it one step at a time; do not repeat
+the earlier Fulham/seat investigations or hunt for a new seat.
+
+```
+node --test browser_probe/test_probe.cjs
+```

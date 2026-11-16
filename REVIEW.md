@@ -111,3 +111,21 @@ change Render settings during this development review.
 
 These documents do not establish specific permission for an Everton ticketing
 monitor. No contact with Everton is proposed or required by this review.
+
+## Passive diagnostic implementation
+
+The core fixes above were saved on the remote development branch in commit
+`c12b86db56f9f7e66e704a787fa6d40148e97593` through the connected GitHub tool.
+
+`browser_probe/` now implements the bounded passive freshness diagnostic. Its
+16 offline JavaScript tests cover endpoint/fixture filtering, old-versus-new
+request timing, duplicate callbacks, report privacy, correct-page checks,
+navigation, restriction detection and a restriction flag surviving panel reopen.
+The panel is exercised with simulated browser APIs. No live browser/website
+trial has been performed. The original 62 Python tests were already passing;
+the diagnostic does not change the Python alert engine or its startup gate.
+
+The next user action is to download the diagnostic package. Guide installation
+and the five-minute idle observation one action at a time. The resulting safe
+metadata report will help decide whether the browser supplies idle updates;
+it will not itself validate seat extraction or prove unattended viability.

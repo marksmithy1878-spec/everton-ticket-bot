@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Everton Passive Check</title><link rel="stylesheet" href="panel.css"></head>
+<body>
+<main>
+  <p class="eyebrow">EVERTON v LIVERPOOL · EVENT 1480</p>
+  <h1>Does the page update while idle?</h1>
+  <p>This diagnostic watches availability requests the browser already makes. It does not reload the page, click anything on it, or check for tickets itself.</p>
+  <p class="notice">No ticket alerts or overnight monitoring are active.</p>
+  <div class="actions"><button id="start">Start idle check</button><button id="finish" disabled>Finish check</button><button id="save" disabled>Save safe report</button></div>
+  <p id="status" role="status">Open this panel on the Liverpool ticket page. No check has started.</p>
+  <div class="stats"><section><strong id="elapsed">0:00</strong><span>time observed</span></section><section><strong id="new">0</strong><span>availability requests started during check</span></section><section><strong id="old">0</strong><span>earlier requests in existing log</span></section></div>
+  <p id="meaning">After starting, leave the ticket page untouched for five minutes. Do not press Try Again or refresh it.</p>
+  <p>New requests are a lead to investigate, not proof of fresh seats. No requests may mean no idle updates, a changed endpoint, or incomplete browser visibility.</p>
+  <div class="table"><table><thead><tr><th>Request start (UK time)</th><th>Family</th><th>HTTP</th><th>When</th><th>Fixture link</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <p class="privacy">Reports contain only fixed endpoint labels, timestamps, status codes and fixture-association labels. No response bodies, cookies, headers, account details, full URLs or Telegram credentials are collected.</p>
+</main>
+<script src="probe.js"></script><script src="panel.js"></script>
+</body></html>
