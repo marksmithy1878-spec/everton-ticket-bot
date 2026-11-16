@@ -1,1 +1,1 @@
-requests
+# Standard library only. No third-party packages required.
