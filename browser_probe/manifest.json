@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Everton Passive Check",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Daytime candidate: observes normal browser availability responses; optional Telegram alerts, no automatic website checks.",
   "host_permissions": ["https://api.telegram.org/*"],
   "devtools_page": "devtools.html",

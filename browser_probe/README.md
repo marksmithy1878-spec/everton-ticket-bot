@@ -1,6 +1,6 @@
 # Everton browser reader and daytime candidate
 
-Version 0.3.0 contains the previously demonstrated passive decoder plus an
+Version 0.3.1 contains the previously demonstrated passive decoder plus an
 optional, explicitly armed local Telegram pilot. Start OFF. The pilot has **not**
 been demonstrated with a real positive Liverpool opportunity or the new browser
 sender's real phone delivery. It does not establish unattended monitoring.
@@ -63,7 +63,7 @@ The existing inspected-page expression returns only four booleans (Liverpool,
 Fulham comparison, unavailable redirect and visible restriction); it exports no
 page contents or URL. Native DevTools buffers are read without replaying requests.
 
-The 0.3.0 manifest newly permits only https://api.telegram.org/*, and connect-src
+The manifest permits only https://api.telegram.org/*, and connect-src
 is restricted to that origin. No credentials are embedded. A verified client
 may call getMe and sendMessage after the user's explicit TEST/arming actions.
 Calls use POST, no browser credentials, no referrer, no redirect-following and a
@@ -75,7 +75,9 @@ Token and chat ID are cleared from input fields on use and kept only in the loca
 client closure. Closing/reloading the panel or Stop discards them. They are not
 saved in localStorage, reports or logs. Local persistent data consists only of
 SHA-256 snapshot fingerprints/delivery timestamps and a restriction latch.
-The earlier possible token exposure must be resolved before live arming.
+The user has reported replacing the token privately in BotFather. The new
+sender has not completed a successful real TEST; its connection failure is
+unresolved. Render still holds the revoked previous token and stays suspended.
 
 ## Session and failure controls
 
@@ -124,3 +126,37 @@ headless rendering or real Edge pilot demonstration is claimed.
 Primary documentation: [Chrome DevTools Network](https://developer.chrome.com/docs/extensions/reference/api/devtools/network),
 [Telegram Bot API](https://core.telegram.org/bots/api), and
 [Web Locks](https://www.w3.org/TR/web-locks/).
+
+## Credential-free connection diagnosis (0.3.1)
+
+A real 0.3.0 TEST returned TELEGRAM_NETWORK_OR_TIMEOUT. That broad code did not
+locate the stage or network cause. Normal API-root navigation reached Telegram
+documentation and the user's main Edge site-access switch is on, but this is
+not evidence that the extension can complete a credentialed API POST.
+
+The new Check Telegram connection button reads the granted host permission
+when available, then makes at most one token-free POST to the deliberately
+invalid public /bot/getMe path. A recognised HTTP 401/404 JSON API error is
+reachability evidence only, not authentication or message delivery. Permission
+denial stops the probe before networking. Unknown permission results are
+reported as unknown. No token, chat ID, input values or response descriptions
+enter the probe or its output. Permission lookup and network timeouts are bounded.
+It exports only fixed codes, booleans, HTTP status and elapsed milliseconds.
+There is no automatic retry and no change to the Everton observer.
+
+Native fetch is bound to globalThis for receiver compatibility; this has not
+been proven to be the cause of the observed failure. Authenticated calls now
+distinguish deadline timeouts, cancelled requests, generic fetch failures,
+security exceptions, HTTP failures and invalid JSON, without raw exception
+messages/URLs. TEST errors identify verification versus message delivery.
+The browser's own diagnostic logs may record API URLs: never share raw network
+exports or error dumps involving a live token. Use this token-free check and
+the fixed panel status instead. The code itself logs/exports no credentials.
+
+119 offline browser tests pass, including native receiver binding, a denied
+permission causing zero network calls, unknown permission/timeouts, public API
+reply recognition, unexpected HTTP replies, timeout-versus-fetch distinction,
+private input/response exclusion and proving the neutral UI check cannot arm
+or send messages. Actual extension connectivity and a real TEST remain
+unverified. No token was obtained by the agent, no authenticated requests were
+made by these tests, and no production settings were changed.

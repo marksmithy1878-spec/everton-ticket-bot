@@ -66,7 +66,7 @@ See [REVIEW.md](REVIEW.md) for the investigation and live evidence.
 ## Browser reader and optional daytime candidate
 
 [`browser_probe`](browser_probe/README.md) includes the verified section/fixture
-reader and the new **0.3.0 daytime candidate**. [Setup and limits](browser_probe/DAYTIME_PILOT.md)
+reader and the new **0.3.1 daytime candidate**. [Setup and limits](browser_probe/DAYTIME_PILOT.md)
 are written for the laptop user. The candidate starts OFF, uses new native
 browser callbacks only, and cannot turn saved reports or Fulham counts into
 Liverpool alerts. A fresh successful event-1480 command response with positive
@@ -78,7 +78,7 @@ unknown; Fulham event 1481 explicitly matched its request and decoded 400 places
 across 14 sections. OPTIONS 200 is correctly excluded. That comparison is distinct
 from proving a positive Liverpool alert or unattended source.
 
-There are **110 passing offline JavaScript tests**, including a complete simulated
+There are **119 passing offline JavaScript tests**, including a complete simulated
 reader → classifier → Telegram path, credential gate, wrong bot, notification
 failures, persisted duplicates/restrictions, navigation races, one active session,
 UK quiet hours and a heartbeat overlapping a ticket observation. No real Telegram
@@ -93,4 +93,23 @@ python package_browser.py
 The extension's only outbound permission is api.telegram.org; it has no ticket-site
 host permission, reload/click loop or background worker. Token and chat ID live only
 in its panel session and are cleared from inputs on use. Reviewable code is on
-`ticket-bot-v2`; no production deployment or credential rotation has occurred.
+`ticket-bot-v2`; no Render deployment or settings change has occurred. The user has since
+reported privately rotating the BotFather token; the replacement has not yet
+completed the new browser sender's real TEST.
+
+## Current Telegram connection blocker (0.3.1)
+
+The installed 0.3.0 pilot's real TEST failed with its broad
+TELEGRAM_NETWORK_OR_TIMEOUT code. No successful phone delivery was reported.
+That code does not identify whether verification or message delivery failed,
+or distinguish a timeout from another fetch failure. Normal browser navigation
+to the public API root redirected to Telegram documentation, and Edge's main
+site-access switch is on. Neither establishes working extension transport.
+
+Version 0.3.1 binds the native fetch receiver, reports fixed timeout/fetch/security
+error codes and TEST stage, and adds a credential-free permission/public-API check.
+This is a diagnostic improvement, not a claim that the real network cause is fixed.
+The check performs one token-free request, sends no message and cannot arm alerts.
+Current BotFather replacement credentials were entered privately; the agent has
+not received them. Render still holds the previous revoked token, remains
+suspended, and must not be restarted without an approved credential update.

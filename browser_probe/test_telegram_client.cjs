@@ -1,7 +1,7 @@
 "use strict";
 const {test} = require("node:test");
 const assert = require("node:assert/strict");
-const {createClient} = require("./telegram_client.js");
+const {createClient, probeConnection} = require("./telegram_client.js");
 const token = "123456:" + "x".repeat(35);
 const chat = "1234567";
 const reply = (body, status = 200) => ({status, ok: status >= 200 && status < 300, async json() {return body;}});
@@ -42,7 +42,7 @@ test("HTTP errors, API errors and malformed JSON stay sanitized", async () => {
 test("network errors do not leak token-bearing URLs", async () => {
   const c = createClient(token, chat, {fetchImpl: async url => {throw new Error(url);}});
   const result = await c.verify();
-  assert.equal(result.code, "TELEGRAM_NETWORK_OR_TIMEOUT");
+  assert.equal(result.code, "TELEGRAM_NETWORK_FAILED");
   assert.equal(JSON.stringify(result).includes(token), false);
 });
 test("429 retry_after is honored without automatic retries", async () => {
@@ -72,7 +72,7 @@ test("timeouts abort once and never retry", async () => {
   const c = createClient(token, chat, {timeoutMs: 1, fetchImpl: (url, options) => new Promise((resolve, reject) => {
     calls++; options.signal.addEventListener("abort", () => reject(new Error(url)));
   })});
-  assert.equal((await c.verify()).code, "TELEGRAM_NETWORK_OR_TIMEOUT");
+  assert.equal((await c.verify()).code, "TELEGRAM_TIMEOUT");
   assert.equal(calls, 1);
 });
 
@@ -83,4 +83,70 @@ test("closing while authentication is pending cannot revive the client", async (
   const pending = c.verify(); c.close(); finish(bot());
   assert.equal((await pending).ok, false);
   assert.equal((await c.send("TEST")).ok, false);
+});
+
+test("denied Telegram permission stops the credential-free probe before networking", async () => {
+  let calls = 0;
+  const output = await probeConnection({checkPermission: async () => false, fetchImpl: async () => {calls++; throw new Error();}});
+  assert.equal(output.code, "TELEGRAM_PERMISSION_NOT_GRANTED");
+  assert.equal(output.http_response_received, false);
+  assert.equal(calls, 0);
+});
+test("token-free probe recognises an expected API error without sending credentials or messages", async () => {
+  const calls = [];
+  const output = await probeConnection({token: "fake-private-input", chatId: "fake-private-chat", checkPermission: async () => true,
+    fetchImpl: async (url, options) => {calls.push({url, options}); return reply({ok: false, error_code: 404, description: "fake-private-response"}, 404);}});
+  assert.equal(calls.length, 1); assert.equal(calls[0].url, "https://api.telegram.org/bot/getMe");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {});
+  assert.equal(output.code, "TELEGRAM_PUBLIC_API_REACHED");
+  assert.equal(output.http_response_received, true);
+  assert.equal(output.api_reply_recognised, true);
+  assert.equal(output.http_status, 404);
+  assert.equal(JSON.stringify(output).includes("fake-private"), false);
+  assert.equal(JSON.stringify(output).includes("https://"), false);
+});
+test("a completed unexpected HTTP response does not validate Telegram API or authentication", async () => {
+  const output = await probeConnection({fetchImpl: async () => reply({ok: false, error_code: 403}, 403)});
+  assert.equal(output.http_response_received, true);
+  assert.equal(output.api_reply_recognised, false);
+  assert.equal(output.code, "TELEGRAM_UNEXPECTED_PUBLIC_REPLY");
+});
+test("fetch failure and an actual deadline timeout are distinct sanitized results", async () => {
+  const failed = await probeConnection({fetchImpl: async url => {throw new TypeError(url);}});
+  assert.equal(failed.code, "TELEGRAM_FETCH_FAILED");
+  assert.equal(failed.http_response_received, false);
+  const timedOut = await probeConnection({timeoutMs: 1, fetchImpl: (url, options) => new Promise((resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(new TypeError(url)));
+  })});
+  assert.equal(timedOut.code, "TELEGRAM_TIMEOUT");
+  assert.equal(JSON.stringify([failed, timedOut]).includes("https://"), false);
+});
+test("permission lookup failure or timeout remains unknown without preventing a public probe", async () => {
+  for (const checkPermission of [async () => {throw new Error("fake-private-policy");}, () => new Promise(() => {})]) {
+    const output = await probeConnection({checkPermission, permissionTimeoutMs: 1, fetchImpl: async () => reply({ok: false, error_code: 404}, 404)});
+    assert.equal(output.permission_granted, null);
+    assert.equal(output.code, "TELEGRAM_PUBLIC_API_REACHED");
+    assert.equal(JSON.stringify(output).includes("fake-private-policy"), false);
+  }
+});
+test("default browser fetch is bound to its native global receiver", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = function(url, options) {
+    assert.equal(this, globalThis); calls++;
+    return Promise.resolve(url === "https://api.telegram.org/bot/getMe" ? reply({ok: false, error_code: 404}, 404) : bot());
+  };
+  try {
+    const client = createClient(token, chat);
+    assert.equal((await client.verify()).ok, true);
+    assert.equal((await probeConnection()).code, "TELEGRAM_PUBLIC_API_REACHED");
+    assert.equal(calls, 2);
+  } finally {globalThis.fetch = original;}
+});
+test("public probe cannot leak invalid JSON errors or response text", async () => {
+  const output = await probeConnection({fetchImpl: async () => ({status: 502, ok: false, async json() {throw new Error("fake-private-proxy-message");}})});
+  assert.equal(output.code, "TELEGRAM_INVALID_REPLY");
+  assert.equal(output.http_response_received, true);
+  assert.equal(output.http_status, 502);
+  assert.equal(JSON.stringify(output).includes("fake-private"), false);
 });

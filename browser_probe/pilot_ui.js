@@ -1,13 +1,14 @@
 /* Optional daytime pilot. No getHAR, page reload, click, or Everton HTTP call. */
 "use strict";
 (function () {
-  const ids = ["pilotToken", "pilotChat", "pilotTest", "pilotPhone", "pilotPolicy", "pilotStart", "pilotStop", "pilotStatus", "pilotLast"];
+  const ids = ["pilotToken", "pilotChat", "pilotTest", "pilotPhone", "pilotPolicy", "pilotStart", "pilotStop", "pilotStatus", "pilotLast", "pilotConnection", "pilotConnectionStatus"];
   const controls = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
   const native = typeof chrome !== "undefined" ? chrome.devtools : null;
   let client = null;
   let engine = null;
   let testDelivered = false;
   let connecting = false;
+  let diagnosing = false;
   let starting = false;
   let running = false;
   let armedAt = null;
@@ -19,12 +20,13 @@
   let queue = Promise.resolve();
   const latched = () => { try { return localStorage.getItem("everton-restriction-observed") === "true"; } catch { return true; } };
   function renderPilot() {
-    controls.pilotTest.disabled = connecting || running || starting;
-    controls.pilotStart.disabled = connecting || running || starting || !native || !navigator.locks || latched() ||
+    controls.pilotConnection.disabled = diagnosing || connecting || running || starting;
+    controls.pilotTest.disabled = diagnosing || connecting || running || starting;
+    controls.pilotStart.disabled = diagnosing || connecting || running || starting || !native || !navigator.locks || latched() ||
       !testDelivered || controls.pilotPhone.checked !== true || controls.pilotPolicy.checked !== true;
     controls.pilotStop.disabled = !running && !starting && !client;
-    controls.pilotToken.disabled = running || starting || connecting;
-    controls.pilotChat.disabled = running || starting || connecting;
+    controls.pilotToken.disabled = diagnosing || running || starting || connecting;
+    controls.pilotChat.disabled = diagnosing || running || starting || connecting;
     controls.pilotLast.textContent = lastResponseAt === null ? "No fresh Liverpool response read in this session." :
       `Latest Liverpool response: ${EvertonAlerts.ukTime(lastResponseAt)}. This is not a continuous fresh-data feed.`;
   }
@@ -39,8 +41,27 @@
     controls.pilotStatus.textContent = message;
     renderPilot();
   }
+  controls.pilotConnection.addEventListener("click", async () => {
+    if (diagnosing || connecting || running || starting) return;
+    diagnosing = true;
+    controls.pilotConnectionStatus.textContent = "Checking Telegram permission and a token-free public API path. No message will be sent.";
+    renderPilot();
+    const result = await EvertonTelegram.probeConnection({checkPermission: () => new Promise(resolve => {
+      if (typeof chrome === "undefined" || !chrome.permissions || typeof chrome.permissions.contains !== "function") { resolve(null); return; }
+      try {
+        chrome.permissions.contains({origins: ["https://api.telegram.org/*"]}, granted => {
+          const failed = chrome.runtime && chrome.runtime.lastError;
+          resolve(failed ? null : granted === true);
+        });
+      } catch { resolve(null); }
+    })});
+    diagnosing = false;
+    const permission = result.permission_granted === true ? "granted" : result.permission_granted === false ? "not granted" : "unknown";
+    controls.pilotConnectionStatus.textContent = `Telegram permission: ${permission}. Public API: ${result.code}${result.http_status === null ? "" : ` (HTTP ${result.http_status})`}. Duration: ${result.elapsed_ms} ms. No credentials used; no message sent.`;
+    renderPilot();
+  });
   controls.pilotTest.addEventListener("click", async () => {
-    if (running || starting || connecting) return;
+    if (diagnosing || running || starting || connecting) return;
     if (client) client.close();
     const mine = ++epoch;
     connecting = true; testDelivered = false; controls.pilotPhone.checked = false;
@@ -58,7 +79,7 @@
     if (!testDelivered) { candidate.close(); client = null; }
     controls.pilotStatus.textContent = testDelivered
       ? "Telegram accepted the TEST message. Confirm its arrival on your phone. Ticket alerts remain OFF."
-      : `Telegram test failed (${result.code}). Credentials were cleared; ticket alerts remain OFF.`;
+      : `Telegram test failed during ${verified.ok ? "message delivery" : "bot verification"} (${result.code}). Credentials were cleared; ticket alerts remain OFF.`;
     renderPilot();
   });
   controls.pilotStart.addEventListener("click", () => {

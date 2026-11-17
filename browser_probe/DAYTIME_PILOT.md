@@ -14,20 +14,23 @@ resale status, individual seat identity and purchase are unconfirmed.
 ## Setup, guided one action at a time
 
 1. Extract the package and replace all files in the original extension folder.
-2. Reload Everton Passive Check in edge://extensions. Its version is 0.3.0.
+2. Reload Everton Passive Check in edge://extensions. Its version is 0.3.1.
    Edge may require approval of the new api.telegram.org permission. That is
    for Telegram delivery; the extension requests no Everton site permission.
 3. Reopen Everton Check in Developer Tools. Updating may discard old Network
    records. Do not repeatedly refresh the website to refill them.
-4. Privately enter the correct bot token and CHAT_ID in the local panel. Never
+4. First click Check Telegram connection — no credentials. Share only its
+   fixed status line if it fails. This sends no message and cannot turn on alerts.
+   A recognised 401/404 from this token-free path proves only connection.
+5. Privately enter the correct bot token and CHAT_ID in the local panel. Never
    paste credentials into ChatGPT, screenshots, GitHub, reports or console commands.
-5. Click Verify bot and send TEST. It must verify @EvertonResale_bot and the
+6. Click Verify bot and send TEST. It must verify @EvertonResale_bot and the
    TEST must arrive on your phone. This leaves ticket alerts OFF.
-6. Before arming, resolve the earlier possible token exposure. If it cannot be
+7. Before arming, resolve the earlier possible token exposure. If it cannot be
    established that only a revoked token was exposed, rotate privately first.
    No Render settings or tokens have been changed by this candidate. Approval
    for any production setting change must be obtained separately.
-7. Only after explicit approval, on the Liverpool event 1480 seating page,
+8. Only after explicit approval, on the Liverpool event 1480 seating page,
    confirm TEST receipt and local pilot approval, then Start daytime pilot.
    Starting does not refresh the website. It ignores historical records.
 
@@ -66,3 +69,10 @@ laptop/Developer Tools stops coverage; this is a daytime helper.
 Keep just one pilot open in one browser profile. A lock prevents a second panel
 in that profile from running at the same time. Different profiles/devices do not
 share that lock. The Render worker remains suspended.
+
+Current setup note, 17 November: you reported revoking/replacing the BotFather
+token privately. Do not rotate it again merely because the connection test
+failed. The new token's authentication and this browser sender's phone delivery
+are still unverified. The previous token saved in Render is now revoked; keep
+Render suspended and leave its settings unchanged until an update is approved.
+The assistant must not request your token or raw network/error export.

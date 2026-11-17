@@ -354,3 +354,40 @@ requests were sent, and real Edge pilot operation is still unverified. The Pytho
 code/startup refusal and all production settings are unchanged. No approval to
 arm this candidate has yet been requested or received. Packaging is reproducible
 with package_browser.py and excludes all tests and private reports.
+
+
+## Real Telegram failure; private token rotation and safe diagnostics — 17 November
+
+The user installed 0.3.0 and opened its real Edge panel. To resolve the earlier
+possible exposure, they reported revoking/replacing @EvertonResale_bot's token
+in BotFather and pasted the replacement privately into the local password field,
+with the unchanged CHAT_ID copied from Render. No credentials were received by
+the agent or placed in repository/chat/report contents. Render settings remain
+unchanged and suspended; its saved token is therefore the previous revoked value.
+An approved private update is required before any future Render restart.
+
+The real TEST did not arrive on the phone and the panel returned
+TELEGRAM_NETWORK_OR_TIMEOUT. In 0.3.0 this could arise during verification or
+sendMessage, so neither authentication nor the exact network failure is proven.
+The visible null SecondsRemaining console error belongs to the inspected
+Everton page and does not diagnose the extension's failure. Public API-root
+navigation redirected to core.telegram.org/bots, while Edge's main extension
+site-access switch was on. These do not establish credentialed extension POST
+connectivity or prove a withheld permission, CORS, IPv6 or timeout cause.
+
+Version 0.3.1 binds native fetch to its global receiver, adds safe stage-specific
+TEST errors and distinct bounded error codes, and adds one credential-free
+connection check. It queries actual host permission and at most one token-free
+public invalid API path. It cannot send messages, access credential inputs or
+arm the pilot. Permission denial makes no request. Its fixed output contains no
+URLs, raw errors, response descriptions, chat IDs or token values. This does not
+claim to resolve the real cause; the next user check is this neutral diagnostic,
+not another blind credentialed retry. No Everton requests are introduced.
+
+119 offline browser tests pass. Added checks cover native binding, public API
+error recognition, unknown/denied permission and timeout, private-field exclusion,
+separate fetch/timeouts and the UI's neutral check leaving alerts off. No real
+messages or authenticated API requests were made by the tests. Actual phone
+delivery via the browser candidate, positive Liverpool extraction-to-message
+and unattended monitoring remain unverified. No live arming or Render update
+has been approved.

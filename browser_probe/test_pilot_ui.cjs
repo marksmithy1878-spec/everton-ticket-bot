@@ -32,7 +32,7 @@ function harness({map = new Map(), locks = lockManager(), wrongBot = false, hold
   const context = vm.createContext({
     window: {}, Date: Clock, Object, Promise, navigator: {locks}, localStorage: storage,
     document: {getElementById(id) {if (!elements.has(id)) elements.set(id, el()); return elements.get(id);}},
-    chrome: {devtools: {network: {
+    chrome: {permissions: {contains(options, callback) {callback(true);}}, devtools: {network: {
       onRequestFinished: {addListener(fn) {listeners.request = fn;}},
       onNavigated: {addListener(fn) {listeners.navigation = fn;}},
       getHAR() {throw new Error("Pilot must not import historical records");}
@@ -43,7 +43,10 @@ function harness({map = new Map(), locks = lockManager(), wrongBot = false, hold
     EvertonProbe: require("./probe.js"), EvertonResponseReader: require("./response_reader.js"),
     EvertonAlerts: {...alerts, createEngine: options => alerts.createEngine({...options, now: () => now,
       hash: async evidence => crypto.createHash("sha256").update(JSON.stringify(evidence.sections)).digest("hex")})},
-    EvertonTelegram: {createClient: (t, c) => telegram.createClient(t, c, {now: () => now, fetchImpl: async (url, options) => {
+    EvertonTelegram: {probeConnection: options => telegram.probeConnection({...options, now: () => now, fetchImpl: async (url, settings) => {
+      calls.push({url, options: settings});
+      return {status: 404, ok: false, async json() {return {ok: false, error_code: 404};}};
+    }}), createClient: (t, c) => telegram.createClient(t, c, {now: () => now, fetchImpl: async (url, options) => {
       calls.push({url, options});
       const method = url.endsWith("/getMe") ? "getMe" : "sendMessage";
       if (holdHeartbeat && method === "sendMessage" && JSON.parse(options.body).text.startsWith("DAYTIME HELPER STATUS")) await new Promise(resolve => holdHeartbeat(resolve));
@@ -189,4 +192,27 @@ test("a fresh opportunity waits for an in-flight heartbeat and is still delivere
   finish(); await drain();
   assert.equal(h.sends().length, 3);
   assert.match(JSON.parse(h.sends()[2].options.body).text, /^POSSIBLE TICKET OPPORTUNITY/);
+});
+
+
+test("connection check needs no credentials, sends no message and cannot arm alerts", async () => {
+  const h = harness();
+  h.input("pilotToken", "fake-private-input");
+  h.input("pilotChat", "fake-private-chat");
+  await h.click("pilotConnection"); await drain();
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].url, "https://api.telegram.org/bot/getMe");
+  assert.deepEqual(JSON.parse(h.calls[0].options.body), {});
+  assert.equal(h.sends().length, 0);
+  assert.equal(h.elements.get("pilotStart").disabled, true);
+  assert.match(h.elements.get("pilotConnectionStatus").textContent, /permission: granted/);
+  assert.match(h.elements.get("pilotConnectionStatus").textContent, /TELEGRAM_PUBLIC_API_REACHED/);
+  assert.equal(h.elements.get("pilotConnectionStatus").textContent.includes("fake-private"), false);
+});
+
+test("connection diagnostics are disabled while the pilot is active", async () => {
+  const h = harness(); await h.arm();
+  const calls = h.calls.length;
+  assert.equal(h.elements.get("pilotConnection").disabled, true);
+  await h.click("pilotConnection"); assert.equal(h.calls.length, calls);
 });

@@ -4,10 +4,12 @@
 <title>Everton Passive Check</title><link rel="stylesheet" href="panel.css"></head>
 <body>
 <main>
-  <p class="eyebrow">EVERTON TICKET DIAGNOSTIC · v0.3.0</p>
+  <p class="eyebrow">EVERTON TICKET DIAGNOSTIC · v0.3.1</p>
   <h1>Everton daytime pilot</h1>
   <p class="notice">Alerts start OFF. This helper reacts to new data from your normal browser checks. It never refreshes Everton or checks tickets by itself. Keep the laptop and Developer Tools open.</p>
   <p>Candidate section alerts use the format demonstrated on Fulham. A positive Liverpool response-to-phone alert has not been demonstrated. Ordinary inventory may be included; every ticket message says POSSIBLE TICKET OPPORTUNITY.</p>
+  <div class="actions"><button id="pilotConnection">Check Telegram connection — no credentials</button></div>
+  <p id="pilotConnectionStatus" role="status">Connection check not run. This check needs no token or Chat ID and sends no message.</p>
   <div class="credentials">
     <label>Telegram bot token <input id="pilotToken" type="password" autocomplete="off" spellcheck="false"></label>
     <label>Chat ID <input id="pilotChat" type="password" autocomplete="off" spellcheck="false"></label>
