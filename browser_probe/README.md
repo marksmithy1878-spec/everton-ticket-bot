@@ -111,7 +111,7 @@ node --test browser_probe/test_probe.cjs browser_probe/test_response_reader.cjs
 python -m unittest -q
 ```
 
-There are 57 passing offline JavaScript tests. They use reconstructed metadata
+There are 62 passing offline JavaScript tests. They use reconstructed metadata
 and reduced screenshot transcriptions, not original full HAR/body recordings.
 The request event-ID extraction still needs a real Edge check. Simulated APIs do not validate live data.
 An attempted local Chromium render was blocked by the environment's socket
@@ -135,8 +135,9 @@ used only for the developer test suite.
 Response review now checks eventId/event_id at the JSON request root, in
 URL-encoded form fields, or in the request URL. These are candidate formats,
 not a claim that the live API uses them: only a real buffer check can establish
-that. Unsupported or absent fields remain unknown. Duplicate, nested, escaped,
-invalid and conflicting event fields fail closed. Arbitrary event IDs are never
+that. Unsupported or absent fields remain unknown. Duplicate, unsupported nested, escaped,
+invalid and conflicting event fields fail closed. Version 0.2.3 adds the exact
+observed command structure described below. Arbitrary event IDs are never
 exported. A conflicting ID prevents response decoding for that record.
 Only the two allowlisted page fixtures 1480 and 1481 can be exported as matches.
 Other request values remain local; no raw request body is copied into reports.
@@ -148,3 +149,24 @@ a website refresh. Closing/reopening DevTools may discard response buffers in
 some browsers; if absent, report that limitation instead of repeated refreshes.
 Even a matching ID leaves the decision ERROR/UNKNOWN in this diagnostic. No
 Telegram messages, automatic refresh or live availability decision is enabled.
+
+## Captured command structure correction (0.2.3)
+
+The real Payload screenshot shows a JSON object containing command.eventId
+and command.targetEvent, both identifying 1481, under DevTools' Form data
+heading. The 0.2.2 parser checked ordinary form fields or JSON-root event IDs
+and missed this structure; its unknown result did not establish that the
+browser omitted request data. The uploaded report therefore remained unknown.
+
+Version 0.2.3 handles the observed JSON command under JSON MIME, raw JSON under
+form MIME, or a JSON-only form key with an empty value. Both command fields
+must be present and agree with the inspected fixture and any explicit URL
+event ID. Duplicate command/event/target keys, mixed binding structures,
+unsupported nesting and conflicting values fail closed. No other command
+values leave the decoder. Tests use a minimal two-field reconstruction from
+the screenshot, not the user's full request payload. All decisions remain
+ERROR/UNKNOWN until live extraction and freshness are validated.
+
+Do not repeat website reloads merely to test packaging changes. Try the
+existing record first after updating; if DevTools discarded it, validate on
+the next ordinary manual ticket check. No automatic requests are enabled.

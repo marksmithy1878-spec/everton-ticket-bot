@@ -171,7 +171,7 @@ ui.readResponses.addEventListener("click", async () => {
     const finalContext = await inspectPage();
     const sameFixture = fixtureId === 1480 ? finalContext.correct === true : finalContext.comparison === true;
     responseReview = {
-      diagnostic: "everton-response-review-v1", extension_version: "0.2.2",
+      diagnostic: "everton-response-review-v1", extension_version: "0.2.3",
       event_id: fixtureId, comparison_only: fixtureId === 1481, report_at: new Date().toISOString(),
       page_event_1480_verified: finalContext.correct === true,
       page_event_1481_verified: finalContext.comparison === true,

@@ -246,3 +246,28 @@ form/query conflicts and ensuring preflight/restricted request bodies are not
 inspected. The Python engine has not changed and retains its startup refusal.
 There is still no dependable unattended source, no automatic website refresh,
 no Telegram connection from this extension and no production deployment.
+
+
+## Actual command format identified; parser correction — 17 November
+
+A second Fulham response report decoded 401 places across 13 sections but
+returned EXPLICIT_EVENT_FIELD_NOT_OBSERVED. This did not distinguish missing
+DevTools data from an unsupported request structure. The count differs from
+the earlier 415-place response following another ordinary manual page load;
+this is not evidence of native idle updates or resale-only inventory.
+
+Inspecting the existing request's Payload view, without another website
+request, revealed JSON under the Form data heading: command.eventId and
+command.targetEvent both identify 1481. Version 0.2.2 assumed root JSON fields
+or conventional form pairs and missed that captured structure. Version 0.2.3
+now checks the exact command object and requires both event fields to agree.
+Raw JSON under form MIME and its JSON-only form-key HAR representation are
+supported, alongside JSON MIME. Unrelated command fields are not exported.
+
+62 offline browser tests pass, including a panel run with the captured command
+shape, opposing event IDs, duplicate/escaped/competing command fields, absent
+fields, malformed commands, JSON-form variants and private-field exclusion.
+No raw screenshot or full request payload is committed. The corrected request
+reader still needs a real callback/report check; the screenshot proves the
+format, not the extension's successful extraction of it. No live alerting,
+website reload loop, Telegram integration or production deployment is enabled.

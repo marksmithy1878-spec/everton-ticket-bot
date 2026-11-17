@@ -306,7 +306,7 @@ test("switching fixtures during comparison review cannot complete the capture", 
 
 test("comparison passes its own expected fixture into the request decoder", async () => {
   const item = currentEntry(-1000, 200); item.request.method = "POST";
-  item.request.postData = {mimeType: "application/json", text: JSON.stringify({eventId: 1481, token: "fake-sensitive-value"})};
+  item.request.postData = {mimeType: "application/x-www-form-urlencoded", text: JSON.stringify({command: {eventId: 1481, targetEvent: "1481", token: "fake-sensitive-value"}})};
   item.getContent = callback => callback(JSON.stringify({errorCode: 200, data: {section: {
     header: "sectionName~totalAvailableSeat", data: ["216~2", "227~14"]
   }}}), "");

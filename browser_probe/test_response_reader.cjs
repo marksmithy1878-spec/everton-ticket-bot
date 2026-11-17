@@ -231,3 +231,69 @@ test("preflight and restrictions never inspect request body fields", async () =>
     assert.equal(output.request_fixture.reason, "NOT_READ");
   }
 });
+
+// Minimal transcription of the 17 Nov real Form data screenshot. Unrelated
+// fields are deliberately omitted: no full raw user payload is stored here.
+function observedCommand(eventId = 1481, targetEvent = "1481") {
+  return {command: {eventId, targetEvent}};
+}
+test("captured command structure binds both agreeing event fields under form MIME", async () => {
+  const item = captured();
+  item.request = requestWith(observedCommand(), {postData: {
+    mimeType: "application/x-www-form-urlencoded", text: JSON.stringify(observedCommand())
+  }});
+  const output = await readEntry(item, (entry, now) => summarize(entry, now, 1481), NOW, {expectedEventId: 1481});
+  assert.equal(output.request_fixture.kind, "explicit-event");
+  assert.equal(output.request_fixture.event_id, 1481);
+  assert.equal(output.request_fixture.source, "request-form-json-command");
+  assert.equal(output.response.reported_places, 38);
+  assert.equal(output.state, "ERROR/UNKNOWN");
+  assert.equal(output.ticket_detection_validated, false);
+});
+test("captured command also supports JSON MIME and a JSON-only form key", () => {
+  const text = JSON.stringify(observedCommand());
+  const alternatives = [
+    {mimeType: "application/json; charset=UTF-8", text},
+    {mimeType: "application/x-www-form-urlencoded", text: encodeURIComponent(text) + "="},
+    {mimeType: "application/x-www-form-urlencoded", params: [{name: text, value: ""}]}
+  ];
+  for (const postData of alternatives) {
+    const output = requestFixture(requestWith({}, {postData}), 1481);
+    assert.equal(output.kind, "explicit-event");
+    assert.equal(output.event_id, 1481);
+  }
+});
+test("command IDs must agree with each other, the inspected page, and query IDs", () => {
+  for (const body of [observedCommand(1480, "1481"), observedCommand(1481, "1480"), observedCommand(1480, "1480")]) {
+    assert.equal(requestFixture(requestWith(body), 1481).kind, "conflict");
+  }
+  const query = "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy?eventId=1480";
+  assert.equal(requestFixture(requestWith(observedCommand(), {url: query}), 1480).kind, "conflict");
+});
+test("malformed, duplicate, escaped and competing command event fields fail closed", () => {
+  const texts = [
+    '{"command":{"eventId":1481}}',
+    '{"command":{"targetEvent":"1481"}}',
+    '{"command":null}', '{"command":[]}',
+    '{"command":{"eventId":1481,"eventId":1480,"targetEvent":"1481"}}',
+    '{"command":{"eventId":1481,"targetEvent":"1481","targetEvent":"1480"}}',
+    '{"command":{"eventId":1481,"targetEvent":"1481"},"command":{"eventId":1481,"targetEvent":"1481"}}',
+    '{"eventId":1481,"command":{"eventId":1481,"targetEvent":"1481"}}',
+    '{"command":{"eventId":1481,"targetEvent":"1481"},"other":{"eventId":1481}}',
+    '{"comm\\u0061nd":{"eventId":1481,"targetEvent":"1481"}}',
+    '{"command":{"eventId":1481,"targ\\u0065tEvent":"1481"}}'
+  ];
+  for (const text of texts) {
+    assert.equal(requestFixture(requestWith({}, {postData: {mimeType: "application/x-www-form-urlencoded", text}}), 1481).kind, "unknown", text);
+  }
+});
+test("command extraction retains no unrelated payload fields", () => {
+  const body = observedCommand();
+  body.command.account = "fake-private-account";
+  body.command.token = "fake-private-token";
+  body.unrelated = {privateField: "fake-private-field"};
+  const output = JSON.stringify(requestFixture(requestWith(body), 1481));
+  for (const value of ["fake-private-account", "fake-private-token", "fake-private-field", "privateField", "account", "token"]) {
+    assert.equal(output.includes(value), false);
+  }
+});

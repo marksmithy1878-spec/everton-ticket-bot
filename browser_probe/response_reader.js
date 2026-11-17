@@ -56,7 +56,7 @@
       resale_verified: false, individual_seat_verified: false };
   }
 
-  // Diagnostic extraction only: an explicit root eventId is a candidate binding,
+  // Diagnostic extraction only: explicit supported event fields are candidate bindings,
   // not proof of a fresh, resale-specific source. Never export other body fields.
   function requestFixture(request, expectedEventId) {
     const fail = reason => ({ kind: "unknown", reason });
@@ -72,30 +72,68 @@
       if (isEventKey(key)) { hasQuery = true; values.push(value); }
     }
     if (values.length > 1) return fail("AMBIGUOUS_EVENT_FIELDS");
+    function jsonFixture(text, formEncoding) {
+      if (typeof text !== "string" || !text.length) return fail("REQUEST_BODY_UNAVAILABLE");
+      if (text.length > 65536) return fail("REQUEST_BODY_TOO_LARGE");
+      let body;
+      try { body = JSON.parse(text); } catch { return fail("REQUEST_JSON_INVALID"); }
+      if (!body || typeof body !== "object" || Array.isArray(body)) return fail("REQUEST_JSON_INVALID");
+      const rootKeys = Object.keys(body).filter(isEventKey);
+      const eventTokens = text.match(/"(?:eventId|event_id)"\s*:/gi) || [];
+      const targetTokens = text.match(/"targetEvent"\s*:/gi) || [];
+      const commandTokens = text.match(/"command"\s*:/gi) || [];
+      if (Object.hasOwn(body, "command")) {
+        // Exact structure visible in the 17 Nov Payload screenshot. The form
+        // contains a JSON command, not ordinary eventId=value form fields.
+        const command = body.command;
+        if (!command || typeof command !== "object" || Array.isArray(command)) return fail("COMMAND_SCHEMA_UNEXPECTED");
+        const keys = Object.keys(command).filter(isEventKey);
+        if (rootKeys.length || commandTokens.length !== 1 || keys.length !== 1 || eventTokens.length !== 1 ||
+            targetTokens.length !== 1 || !Object.hasOwn(command, "targetEvent")) return fail("AMBIGUOUS_EVENT_FIELDS");
+        values.push(command[keys[0]], command.targetEvent);
+        bodySource = formEncoding ? "request-form-json-command" : "request-json-command";
+      } else {
+        // Keep the earlier root-field candidate conservative. Other nested
+        // event IDs and targetEvent fields are not silently ignored.
+        if (rootKeys.length > 1 || eventTokens.length !== rootKeys.length || targetTokens.length || commandTokens.length) {
+          return fail("AMBIGUOUS_EVENT_FIELDS");
+        }
+        if (rootKeys.length === 1) {
+          values.push(body[rootKeys[0]]);
+          bodySource = formEncoding ? "request-form-json-root" : "request-json-root";
+        }
+      }
+      return null;
+    }
     const post = request.postData;
     if (post) {
       const mime = typeof post.mimeType === "string" ? post.mimeType.split(";", 1)[0].trim().toLowerCase() : "";
       if (typeof post.text === "string" && post.text.length > 65536) return fail("REQUEST_BODY_TOO_LARGE");
       if (mime === "application/json" || /^application\/[a-z0-9.+-]+\+json$/.test(mime)) {
-        if (typeof post.text !== "string" || !post.text.length) return fail("REQUEST_BODY_UNAVAILABLE");
-        let body;
-        try { body = JSON.parse(post.text); } catch { return fail("REQUEST_JSON_INVALID"); }
-        if (!body || typeof body !== "object" || Array.isArray(body)) return fail("REQUEST_JSON_INVALID");
-        const keys = Object.keys(body).filter(isEventKey);
-        // Duplicates, escaped keys or nested event fields are not silently resolved.
-        // False negatives here are acceptable: this gate cannot enable live alerts.
-        const tokens = post.text.match(/"(?:eventId|event_id)"\s*:/gi) || [];
-        if (keys.length > 1 || tokens.length !== keys.length) return fail("AMBIGUOUS_EVENT_FIELDS");
-        if (keys.length === 1) { values.push(body[keys[0]]); bodySource = "request-json-root"; }
+        const error = jsonFixture(post.text, false);
+        if (error) return error;
       } else if (mime === "application/x-www-form-urlencoded") {
         let params;
-        if (typeof post.text === "string" && post.text.length) {
-          params = [...new URLSearchParams(post.text)].filter(([key]) => isEventKey(key));
-        } else if (Array.isArray(post.params) && post.params.length <= 2000) {
-          params = post.params.filter(item => item && isEventKey(item.name)).map(item => [item.name, item.value]);
-        } else return fail("REQUEST_BODY_UNAVAILABLE");
-        if (params.length > 1) return fail("AMBIGUOUS_EVENT_FIELDS");
-        if (params.length === 1) { values.push(params[0][1]); bodySource = "request-form"; }
+        const text = typeof post.text === "string" ? post.text.trim() : "";
+        if (text.startsWith("{")) {
+          const error = jsonFixture(text, true);
+          if (error) return error;
+        } else {
+          if (text) params = [...new URLSearchParams(text)];
+          else if (Array.isArray(post.params) && post.params.length <= 2000) {
+            params = post.params.filter(item => item && typeof item.name === "string").map(item => [item.name, item.value]);
+          } else return fail("REQUEST_BODY_UNAVAILABLE");
+          // Some HAR representations put this JSON in a single form key with
+          // an empty value. Decode only that exact shape, never a mixed form.
+          if (params.length === 1 && params[0][1] === "" && params[0][0].trim().startsWith("{")) {
+            const error = jsonFixture(params[0][0], true);
+            if (error) return error;
+          } else {
+            const events = params.filter(([key]) => isEventKey(key));
+            if (events.length > 1 || params.some(([key]) => key.toLowerCase() === "targetevent")) return fail("AMBIGUOUS_EVENT_FIELDS");
+            if (events.length === 1) { values.push(events[0][1]); bodySource = "request-form"; }
+          }
+        }
       } else return fail("REQUEST_BODY_FORMAT_UNSUPPORTED");
     }
     if (!values.length) return fail("EXPLICIT_EVENT_FIELD_NOT_OBSERVED");

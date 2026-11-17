@@ -60,19 +60,21 @@ See [REVIEW.md](REVIEW.md) for the code review, classification rules and propose
 ## Passive browser diagnostic (development only)
 
 [`browser_probe`](browser_probe/README.md) contains a small Chrome/Edge DevTools
-extension that observes existing availability-request metadata. Version 0.2.2
+extension that observes existing availability-request metadata. Version 0.2.3
 also reads response buffers already held by DevTools, exporting only allowlisted
 section counts, numeric error codes or matching fixture IDs. It never refreshes, clicks, calls inventory
 endpoints or sends Telegram messages. It is not a ticket detector.
 
-The diagnostic has 57 passing offline JavaScript tests, including a panel run
+The diagnostic has 62 passing offline JavaScript tests, including a panel run
 against simulated DevTools APIs. The 0.2.0 body reader has decoded a real Liverpool HTTP 540/API 5085 error
 and excluded the OPTIONS 200 preflight in Edge. These historical records are
 not fresh ticket evidence. The 0.2.1 Fulham comparison report also demonstrates positive decoding in
 Edge: 415 places across 15 sections, with the visible section 216 and 227 counts
 matching the map. Resale-only inventory and unattended freshness remain unverified.
-Version 0.2.2 adds local extraction of an explicit request event ID; its request
-identity path still needs a real buffer check. No automatic requests are added. No repeated idle wait or Network-panel investigation is needed.
+Version 0.2.3 supports the observed JSON command inside form-labelled request
+data, checking both command.eventId and command.targetEvent. The request format
+has been identified in the real Payload view; the corrected request-reader path
+still needs a real buffer check. No automatic requests are added. No repeated idle wait or Network-panel investigation is needed.
 Version 0.1.1 corrected the initial host filter to the captured
 `vv-app.eticketing.co.uk/v810/` service. No fresh unattended feed, live seat
 classifier or overnight operation is validated.
