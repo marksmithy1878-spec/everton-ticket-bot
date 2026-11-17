@@ -60,19 +60,20 @@ See [REVIEW.md](REVIEW.md) for the code review, classification rules and propose
 ## Passive browser diagnostic (development only)
 
 [`browser_probe`](browser_probe/README.md) contains a small Chrome/Edge DevTools
-extension that observes existing availability-request metadata while the user
-leaves the page untouched. It never refreshes, clicks, reads response bodies,
-calls inventory endpoints or sends Telegram messages. It is not a ticket detector.
+extension that observes existing availability-request metadata. Version 0.2.0
+also reads response buffers already held by DevTools, exporting only allowlisted
+section counts or numeric error codes. It never refreshes, clicks, calls inventory
+endpoints or sends Telegram messages. It is not a ticket detector.
 
-The diagnostic has 20 passing offline JavaScript tests, including a complete
-panel run against simulated DevTools APIs. It still needs a real trial on the
-user's Windows browser. Install and test it one step at a time; do not repeat
-the earlier Fulham/seat investigations or hunt for a new seat. Version 0.1.1
-fixes the initial host filter using the original screenshots; it now recognises
-the captured `vv-app.eticketing.co.uk/v810/` service. The first version's filter
-would have missed that traffic. Panel installation and redirect refusal have
-been seen in Edge; live availability capture and automatic updates remain unverified.
+The diagnostic has 47 passing offline JavaScript tests, including a panel run
+against simulated DevTools APIs. Its metadata reader has read two historical
+records in Edge; the new body reader still needs a real trial. Install and test
+one step at a time. No repeat idle wait, Fulham exercise, seat hunt or website
+refresh is needed for the next check: use **Read existing responses** instead.
+Version 0.1.1 corrected the initial host filter to the captured
+`vv-app.eticketing.co.uk/v810/` service. No fresh unattended feed, live seat
+classifier or overnight operation is validated.
 
 ```
-node --test browser_probe/test_probe.cjs
+node --test browser_probe/test_probe.cjs browser_probe/test_response_reader.cjs
 ```

@@ -67,6 +67,7 @@ function harness({ log = [], store = new Map() } = {}) {
   }
   const context = vm.createContext({
     window: {}, Date, URL, Blob, String, Set, Map, Object, console,
+    EvertonResponseReader: require("./response_reader.js"),
     localStorage: { getItem: key => store.get(key), setItem: (key, value) => store.set(key, value) },
     document: { getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); }, createElement: element },
     setInterval: callback => { timers.push(callback); return 1; }, setTimeout: () => 1,
@@ -188,4 +189,72 @@ test("another event or duplicate event identifiers do not get the Liverpool redi
     assert.equal(h.counters.harReads, 0);
     assert.doesNotMatch(h.elements.get("status").textContent, /redirected event 1480/);
   }
+});
+
+test("response review identifies POST errors and OPTIONS successes without reading preflight bodies", async () => {
+  const failure = currentEntry(-1000, 540);
+  failure.request.method = "POST";
+  failure.getContent = callback => callback(JSON.stringify({ errorCode: 5085, private: "fake-private-value" }), "");
+  const preflight = currentEntry(-999, 200);
+  preflight.request.method = "OPTIONS";
+  preflight.getContent = () => { throw new Error("must not be read"); };
+  const h = harness({ log: [failure, preflight] });
+  await h.elements.get("readResponses").events.click(); await drain();
+  const report = vm.runInContext("responseReview", h.context);
+  assert.equal(report.capture_completed, true);
+  assert.equal(report.records_reviewed, 2);
+  assert.equal(report.observations[0].response.api_error_code, 5085);
+  assert.equal(report.observations[1].response.reason, "PREFLIGHT_NOT_INVENTORY");
+  assert.equal(JSON.stringify(report).includes("fake-private-value"), false);
+  assert.equal(h.elements.get("saveResponses").disabled, false);
+});
+test("response review does not read buffers when the inspected page is wrong", async () => {
+  const h = harness(); h.page.location.pathname = "/evertonfc/EDP/Event/Index/1481";
+  await h.elements.get("readResponses").events.click();
+  assert.equal(h.counters.harReads, 0);
+});
+test("response review stops an idle observation rather than silently mixing modes", async () => {
+  const h = harness(); await h.elements.get("start").events.click();
+  await h.elements.get("readResponses").events.click(); await drain();
+  assert.equal(h.elements.get("finish").disabled, true);
+  assert.match(h.elements.get("status").textContent, /stopped for a review/);
+});
+test("response review latches a historical access restriction without reading its body", async () => {
+  const entry = currentEntry(-1000, 403); entry.request.method = "POST";
+  entry.getContent = () => { throw new Error("must not read"); };
+  const h = harness({ log: [entry] });
+  await h.elements.get("readResponses").events.click(); await drain();
+  const report = vm.runInContext("responseReview", h.context);
+  assert.equal(report.restriction_observed, true);
+  assert.equal(report.capture_completed, false);
+  assert.equal(h.elements.get("readResponses").disabled, true);
+  assert.equal(h.store.get("everton-restriction-observed"), "true");
+});
+
+test("navigation during a body read makes the review incomplete", async () => {
+  let finishRead;
+  const entry = currentEntry(-1000, 200); entry.request.method = "POST";
+  entry.getContent = callback => { finishRead = callback; };
+  const h = harness({ log: [entry] });
+  await h.elements.get("readResponses").events.click(); await drain();
+  h.listeners.navigation();
+  finishRead(JSON.stringify({ errorCode: 200 }), ""); await drain();
+  const report = vm.runInContext("responseReview", h.context);
+  assert.equal(report.capture_completed, false);
+  assert.equal(report.records_reviewed, 0);
+});
+test("preflight and POST records with identical time and status do not collapse together", async () => {
+  const h = harness(); await h.elements.get("start").events.click();
+  const first = currentEntry(); first.request.method = "OPTIONS";
+  const second = { ...first, request: { ...first.request, method: "POST" } };
+  h.listeners.request(first); h.listeners.request(second); await drain();
+  assert.equal(h.elements.get("new").textContent, 2);
+});
+test("an unavailable DevTools log is not reported as a completed empty review", async () => {
+  const h = harness({ log: null });
+  await h.elements.get("readResponses").events.click(); await drain();
+  const report = vm.runInContext("responseReview", h.context);
+  assert.equal(report.metadata_available, false);
+  assert.equal(report.capture_completed, false);
+  assert.equal(report.records_reviewed, 0);
 });

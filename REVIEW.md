@@ -161,3 +161,41 @@ but do not demonstrate native updates while idle, a resale-only signal, or a
 dependable overnight source. HTTP 200 setup/pricing responses remain insufficient.
 No raw screenshots, account identifiers, headers, cookies or response bodies
 have been added to this repository.
+
+## Browser observations and response reader — 17 November
+
+After normal sign-in, the user reached the actual Liverpool stadium page with
+the no-seats popup. The 0.1.1 panel recorded no new matching requests during a
+6m44s idle observation. One normal manual Try Again caused navigation, so the
+idle observer paused as designed. Restarting only the diagnostic then read two
+historical venueAvailability records: one HTTP 540 and one HTTP 200. No further
+website request was needed to read those records. No restriction flag was recorded.
+
+The uploaded metadata report lacks request methods and body contents. It cannot
+establish whether the HTTP 200 was a CORS preflight, setup or actual inventory
+response. Page-context association also falls short of independent request-level
+fixture binding. Its report-generation time is not a recorded observation-stop
+time, so it must not be used as a precise duration for that final run. These
+limitations prevent a claim of working live ticket detection or overnight coverage.
+
+Version 0.2.0 adds a one-shot response-buffer reader. It never replays website
+requests. It reports HTTP methods, does not read OPTIONS bodies, and locally
+decodes only the photographed section header/row structure or numeric API error
+codes. Root account fields, arbitrary server messages, raw bodies and request
+bodies are not exported. Parser tests use a reduced transcription of visible
+Fulham columns/rows, explicitly not an original full body. Counts may include
+ordinary tickets and zero counts are not a verified negative resale signal.
+
+All body-review observations deliberately remain ERROR/UNKNOWN for live decisions
+until fixture binding, freshness and the live reader are validated. Section counts
+are decoded facts for review, not confirmed tickets. The Python alert engine and
+startup refusal remain unchanged; Telegram and automatic refresh are not enabled.
+
+47 offline JavaScript tests pass, including schema drift, setup/preflight false
+positives, HTTP 540/5085, old/future data, privacy, response-buffer timeouts,
+navigation during reads, restrictions and interrupted metadata retrieval. A local
+headless rendering attempt was prevented by socket permissions. The panel was
+exercised through the simulated DOM/DevTools harness; no successful headless
+render or live response-buffer validation is claimed. The next bounded user check
+is to read the existing buffers after updating the extension, with no new idle
+wait or website refresh. Production remains suspended and unchanged.

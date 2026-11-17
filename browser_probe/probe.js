@@ -24,6 +24,7 @@
     if (!Number.isInteger(status) || status < 0 || status > 599) return null;
     return {
       family,
+      method: ["GET", "POST", "OPTIONS", "HEAD"].includes(entry.request.method) ? entry.request.method : "UNREPORTED",
       request_started_at: new Date(timestamp).toISOString(),
       status,
       association,
@@ -45,6 +46,7 @@
       ticket_detection_validated: false,
       observations: observations.map(item => ({
         family: item.family,
+        method: item.method,
         request_started_at: item.request_started_at,
         status: item.status,
         association: item.association,

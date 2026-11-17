@@ -5,12 +5,15 @@ It is **not** a working ticket monitor. It sends no Telegram messages and has
 no access to Telegram credentials. It has no host permissions or background
 worker. Its extension-page policy forbids outbound network connections.
 
-It observes only existing DevTools metadata for the already-identified
+The idle-check mode observes existing DevTools metadata for the already-identified
 `venueAvailability` and `AreaAvailability` endpoint families on the captured
 `https://vv-app.eticketing.co.uk/v810/` availability service. The main ticket
 page uses a different host. It never refreshes, clicks Try Again, selects a seat,
 changes a filter, calls an inventory endpoint or attempts to bypass a restriction.
-It does not read response bodies, request bodies, cookies or headers. The only
+The new response-review mode reads existing response buffers locally, using
+DevTools' `getContent`. It exports only allowlisted section counts or numeric
+API error codes. It does not read request bodies, cookies or headers and never
+exports raw response bodies. The only
 page inspection reads whether the current location is event 1480 and whether
 a known restriction phrase is visible, with a separate event-unavailable redirect
 flag; it returns three booleans, not page text.
@@ -20,11 +23,19 @@ screenshots. Version 0.1.0 incorrectly looked for inventory requests on the main
 ticket-page host and would have missed this service. No completed idle test or
 availability inference from that version should be treated as evidence.
 
+Version **0.2.0** adds HTTP-method reporting and a one-shot response review. An
+OPTIONS/preflight response is not inventory and its body is not read. A POST
+response is decoded only for the captured venueAvailability structure. Missing
+buffers, unexpected schemas, timeouts and access restrictions stay UNKNOWN.
+Decoded positive section counts still do not validate a live source: they can
+include ordinary tickets, may be historical, and lack proven request-level
+fixture binding. No diagnostic output enables Telegram alerts.
+
 ## What this answers
 
-Does the browser initiate new availability requests while you leave the page
-untouched? That has not been established in the handover and matters before
-claiming any passive unattended monitoring could work.
+The idle check asks whether the browser initiates new matching requests while
+left untouched. The response review asks what already-received records contain.
+Neither mechanism fetches new inventory or establishes unattended viability.
 
 The check distinguishes requests that started before the check from requests
 started during it. Old DevTools records cannot masquerade as new updates.
@@ -42,10 +53,16 @@ If an inventory URL lacks an explicit eventId, its association is labelled only
    **Everton Check** tab, which may be under its overflow menu. If DevTools was
    already open when you installed the extension, close and reopen DevTools only.
    Do not reload the website merely to populate the old network log.
-5. Click **Start idle check**. Leave the ticket page untouched for five minutes.
-   Do not refresh, click Try Again, change filters or open sections during this check.
-6. Click **Finish check**, then **Save safe report**. Share only the generated
-   `Everton_Passive_Report.json`, never a raw HAR or full Network export.
+5. For the next validation, click **Read existing responses**. There is no need
+   to repeat the idle wait, refresh the website or click Try Again. Reading old
+   buffers cannot make those responses fresh; the report records their age.
+6. Click **Save response report** and share `Everton_Response_Report.json`.
+   Never share a raw HAR or full Network export. If buffers are unavailable,
+   report that limitation; do not automatically generate new website traffic.
+
+To update an existing installation, replace its files with the new package in
+the same folder, use **Reload** on its extension card, then reopen DevTools.
+The browser's Developer mode and the extension's own switch must stay enabled.
 
 The assistant should guide these steps individually, not give the user a large
 technical setup task. No need to hunt for a new seat or revisit Fulham.
@@ -77,13 +94,22 @@ the laptop/browser to stay awake. Remove the extension when the diagnostic is do
 From the repository root, run:
 
 ```
-node --test browser_probe/test_probe.cjs
+node --test browser_probe/test_probe.cjs browser_probe/test_response_reader.cjs
 python -m unittest -q
 ```
 
-The extension still requires a real Chrome/Edge trial on the user's machine.
-Simulated browser APIs do not validate live page access or detection.
-The panel installation and its refusal on the event-unavailable redirect have
-been observed in Edge; capture on the stadium page remains unverified. There are
-20 passing offline diagnostic tests, including a reconstructed HAR entry using
-the exact captured API URL and HTTP 540 status. It is not an original HAR export.
+There are 47 passing offline JavaScript tests. They use reconstructed metadata
+and reduced screenshot transcriptions, not original full HAR/body recordings.
+The new reader needs a real Edge check. Simulated APIs do not validate live data.
+An attempted local Chromium render was blocked by the environment's socket
+permissions; no completed headless render is claimed. The DOM/DevTools harness
+covers the panel's response-review and safe-report objects.
+
+Version 0.1.1 has been installed and its metadata reader demonstrated in Edge:
+it read two historical venueAvailability records, HTTP 540 and HTTP 200. Their
+methods were absent from that report; it cannot establish whether the 200 was
+a preflight, setup or actual inventory response. A 6m44s idle observation showed
+no new matching records. Do not generalize that to proof the site never updates.
+The new response reader is not yet demonstrated against those live buffers.
+The diagnostic requires no Node installation for normal browser use; Node is
+used only for the developer test suite.

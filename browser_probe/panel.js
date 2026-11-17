@@ -1,5 +1,5 @@
 "use strict";
-const ui = Object.fromEntries(["start", "finish", "save", "status", "elapsed", "new", "old", "meaning", "rows"].map(id => [id, document.getElementById(id)]));
+const ui = Object.fromEntries(["start", "finish", "save", "status", "elapsed", "new", "old", "meaning", "rows", "readResponses", "saveResponses", "responseStatus", "responseRows"].map(id => [id, document.getElementById(id)]));
 const devtools = typeof chrome !== "undefined" ? chrome.devtools : null;
 let startedAt = null;
 let endedAt = null;
@@ -7,6 +7,8 @@ let active = false;
 let stopped = localStorage.getItem("everton-restriction-observed") === "true";
 let pageVerified = false;
 let generation = 0;
+let responseReview = null;
+let readingResponses = false;
 const observations = [];
 const seen = new Set();
 
@@ -34,9 +36,10 @@ function render() {
   ui.start.disabled = active || stopped || !devtools;
   ui.finish.disabled = !active;
   ui.save.disabled = startedAt === null;
+  ui.readResponses.disabled = readingResponses || stopped || !devtools;
   ui.rows.replaceChildren(...observations.map(o => {
     const row = document.createElement("tr");
-    for (const value of [new Date(o.request_started_at).toLocaleTimeString("en-GB", { timeZone: "Europe/London" }), o.family, o.status, o.timing === "already-in-log" ? "Earlier log" : "During check", o.association === "request-event-1480" ? "Explicit event 1480" : "Page context only"]) {
+    for (const value of [new Date(o.request_started_at).toLocaleTimeString("en-GB", { timeZone: "Europe/London" }), `${o.method} ${o.family}`, o.status, o.timing === "already-in-log" ? "Earlier log" : "During check", o.association === "request-event-1480" ? "Explicit event 1480" : "Page context only"]) {
       const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
     }
     return row;
@@ -60,7 +63,7 @@ async function observe(entry, run = generation) {
   if (!active || run !== generation) return;
   const item = EvertonProbe.summarize(entry, startedAt);
   if (!item) return;
-  const key = [item.family, item.request_started_at, item.status, item.association].join("|");
+  const key = [item.family, item.method, item.request_started_at, item.status, item.association].join("|");
   if (seen.has(key)) return;
   const context = await inspectPage();
   if (!active || run !== generation || seen.has(key)) return;
@@ -106,18 +109,109 @@ ui.start.addEventListener("click", async () => {
 ui.finish.addEventListener("click", () => {
   halt("Check finished. Save the safe report for review; no ticket detection has been validated.");
 });
-ui.save.addEventListener("click", () => {
-  const report = EvertonProbe.makeReport(startedAt, Date.now(), observations, stopped, pageVerified);
+
+function saveJson(report, filename) {
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = "Everton_Passive_Report.json";
-  anchor.click();
+  anchor.href = url; anchor.download = filename; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+ui.save.addEventListener("click", () => {
+  const report = EvertonProbe.makeReport(startedAt, Date.now(), observations, stopped, pageVerified);
+  saveJson(report, "Everton_Passive_Report.json");
+});
+
+ui.readResponses.addEventListener("click", async () => {
+  if (!devtools || stopped || readingResponses) return;
+  if (active) halt("Idle check stopped for a review of existing response buffers.");
+  readingResponses = true;
+  responseReview = null;
+  ui.responseRows.replaceChildren();
+  ui.saveResponses.disabled = true;
+  const run = ++generation;
+  render();
+  const context = await inspectPage();
+  if (run !== generation) {
+    readingResponses = false;
+    ui.responseStatus.textContent = "Navigation interrupted the response review. No website requests were made.";
+    render(); return;
+  }
+  if (!context.correct || context.blocked) {
+    readingResponses = false;
+    ui.responseStatus.textContent = "Response review needs the Liverpool seating page without a restriction message. No requests were made.";
+    if (context.blocked) halt("Restriction observed; diagnostic stopped.", true);
+    render(); return;
+  }
+  ui.responseStatus.textContent = "Reading existing DevTools buffers; no website requests are being sent.";
+  devtools.network.getHAR(async har => {
+    const collected = [];
+    const now = Date.now();
+    const logAvailable = har && Array.isArray(har.entries);
+    const matching = (logAvailable ? har.entries : [])
+      .filter(entry => EvertonProbe.summarize(entry, now));
+    // The most recent matching records are useful; do not reread the entire history.
+    const selected = matching.sort((a, b) => Date.parse(a.startedDateTime) - Date.parse(b.startedDateTime)).slice(-20);
+    for (const entry of selected) {
+      if (run !== generation) break;
+      const record = await EvertonResponseReader.readEntry(entry, EvertonProbe.summarize, now);
+      if (run !== generation) break;
+      if (record) collected.push(record);
+      if (record && record.decision_reason === "ACCESS_RESTRICTED_STOP") {
+        halt("Access restriction found in the existing log; diagnostic stopped.", true);
+        break;
+      }
+    }
+    const finalContext = await inspectPage();
+    responseReview = {
+      diagnostic: "everton-response-review-v1", extension_version: "0.2.0",
+      event_id: 1480, report_at: new Date().toISOString(),
+      page_event_1480_verified: finalContext.correct === true,
+      restriction_observed: stopped || finalContext.blocked === true,
+      capture_completed: logAvailable === true && run === generation && finalContext.correct === true && !finalContext.blocked,
+      metadata_available: logAvailable === true,
+      matching_records: matching.length, records_reviewed: collected.length,
+      ticket_detection_validated: false, observations: collected
+    };
+    if (finalContext.blocked) halt("Restriction observed; diagnostic stopped.", true);
+    readingResponses = false;
+    ui.responseRows.replaceChildren(...collected.map(record => {
+      const row = document.createElement("tr");
+      const decoded = record.response;
+      const descriptions = {
+        PREFLIGHT_NOT_INVENTORY: "Browser preflight; no ticket inventory",
+        POST_METHOD_NOT_OBSERVED: "Inventory request method not confirmed",
+        BODY_NOT_AVAILABLE: "Response body unavailable in DevTools",
+        BODY_READER_NOT_AVAILABLE: "DevTools did not provide a body reader",
+        BODY_READER_TIMEOUT: "Local response read timed out",
+        BODY_READER_FAILED: "Local response read failed",
+        BODY_NOT_READ_ON_RESTRICTION: "Access restricted; body was not read",
+        SECTION_SCHEMA_UNEXPECTED: "No recognised section inventory in this response"
+      };
+      const description = decoded.kind === "section-counts"
+        ? `${decoded.reported_places} section places reported; resale unverified`
+        : decoded.kind === "api-error" ? `Availability request failed (API ${decoded.api_error_code})`
+        : descriptions[decoded.reason] || "No usable inventory data; review required";
+      for (const value of [record.method, record.status, description, record.state]) {
+        const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
+      }
+      return row;
+    }));
+    ui.responseStatus.textContent = responseReview.capture_completed
+      ? `Read ${collected.length} existing records. No ticket alerts are enabled; save the response report for review.`
+      : "Response review was interrupted or restricted. Its records are not a completed live-source validation.";
+    ui.saveResponses.disabled = false;
+    render();
+  });
+});
+ui.saveResponses.addEventListener("click", () => {
+  if (responseReview) saveJson(responseReview, "Everton_Response_Report.json");
 });
 if (devtools) {
   devtools.network.onRequestFinished.addListener(entry => void observe(entry));
   devtools.network.onNavigated.addListener(() => {
+    if (readingResponses) generation += 1;
     if (active) { pageVerified = false; halt("Navigation observed. Check stopped; start again only after reviewing the page."); }
   });
 } else ui.status.textContent = "Open this tool through the browser's Everton Check DevTools panel.";
