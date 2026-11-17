@@ -73,8 +73,11 @@ Edge: 415 places across 15 sections, with the visible section 216 and 227 counts
 matching the map. Resale-only inventory and unattended freshness remain unverified.
 Version 0.2.3 supports the observed JSON command inside form-labelled request
 data, checking both command.eventId and command.targetEvent. The request format
-has been identified in the real Payload view; the corrected request-reader path
-still needs a real buffer check. No automatic requests are added. No repeated idle wait or Network-panel investigation is needed.
+has been identified in the real Payload view and the corrected reader has
+completed a real Edge report: explicit request event 1481, 400 places across
+14 sections, response age 19 seconds at review, preflight excluded. This verifies
+comparison-fixture decoding; it does not validate Liverpool positive detection
+or an unattended source. No automatic requests are added. No repeated idle wait or Network-panel investigation is needed.
 Version 0.1.1 corrected the initial host filter to the captured
 `vv-app.eticketing.co.uk/v810/` service. No fresh unattended feed, live seat
 classifier or overnight operation is validated.
@@ -82,3 +85,11 @@ classifier or overnight operation is validated.
 ```
 node --test browser_probe/test_probe.cjs browser_probe/test_response_reader.cjs
 ```
+
+The comparison diagnostic is complete. No additional installation or repeated
+Fulham page loads are needed for this milestone. There is no dependable
+unattended live source under the currently demonstrated access conditions.
+The existing Render worker stays suspended; the Python startup gate and
+extension's disabled ticket-alert state remain in place. A passive reader
+can only see data the normal browser obtains. Automatic polling/refresh and
+a complete Liverpool extraction-to-Telegram alert have not been demonstrated.

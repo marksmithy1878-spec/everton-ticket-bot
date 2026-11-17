@@ -113,7 +113,9 @@ python -m unittest -q
 
 There are 62 passing offline JavaScript tests. They use reconstructed metadata
 and reduced screenshot transcriptions, not original full HAR/body recordings.
-The request event-ID extraction still needs a real Edge check. Simulated APIs do not validate live data.
+The 0.2.3 request event-ID path has now completed a real Edge report for Fulham.
+That bounded comparison is distinct from the offline tests and does not
+validate fresh Liverpool opportunities or unattended updates.
 An attempted local Chromium render was blocked by the environment's socket
 permissions; no completed headless render is claimed. The DOM/DevTools harness
 covers the panel's response-review and safe-report objects.
@@ -170,3 +172,19 @@ ERROR/UNKNOWN until live extraction and freshness are validated.
 Do not repeat website reloads merely to test packaging changes. Try the
 existing record first after updating; if DevTools discarded it, validate on
 the next ordinary manual ticket check. No automatic requests are enabled.
+
+## Completed comparison validation and remaining limit
+
+The uploaded 0.2.3 report confirms a completed review, explicit request event
+1481 matching the inspected Fulham page, and 400 places across 14 sections.
+The response was 19 seconds old when reviewed. OPTIONS 200 was excluded, and
+no restriction flag was observed in this bounded capture. It does not
+establish a safe automatic checking interval or guaranteed continuous access.
+The report remains ERROR/UNKNOWN for live ticket decisions by design.
+
+This completes the positive response/request-decoder comparison. Further
+repeated Fulham checks or package updates are not required for this milestone.
+No fresh positive Liverpool extraction, continuous native availability updates,
+resale-only counts, overnight monitoring, or extraction-to-Telegram delivery
+is validated. The passive reader cannot discover inventory the page has not
+fetched. Keep the live startup refusal and production suspension in place.

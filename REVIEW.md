@@ -271,3 +271,33 @@ No raw screenshot or full request payload is committed. The corrected request
 reader still needs a real callback/report check; the screenshot proves the
 format, not the extension's successful extraction of it. No live alerting,
 website reload loop, Telegram integration or production deployment is enabled.
+
+
+## Completed real request/response comparison — 17 November
+
+The saved 0.2.3 report confirms capture_completed true and two reviewed
+records. The POST is HTTP 200, explicitly identifies event 1481 from
+request-form-json-command, and decodes 400 places across 14 sections. Its
+age is 19 seconds at review. OPTIONS 200 is excluded as preflight without
+reading its request/response body. No restriction flag is observed in this
+bounded capture. This completes demonstration of positive section decoding
+and explicit request-fixture matching in real Edge for the comparison fixture.
+No raw user report or request body is committed.
+
+The diagnostic's ERROR/UNKNOWN state and ticket_detection_validated false
+remain correct: a positive Liverpool observation, resale-only inventory and
+unattended refresh/freshness have not been demonstrated. The earlier
+Liverpool idle test showed no new matching requests, which is evidence only
+for that bounded observation, not proof that the site never updates. Render's
+403 failures remain unresolved and no alternate cloud access is established.
+
+Do not continue repeated Fulham checks or cosmetic package changes as a
+substitute for establishing a fresh source. No dependable unattended live
+monitor currently exists under the demonstrated access conditions. A passive
+reader can assist only when the normal browser obtains new data; it cannot
+create overnight coverage by parsing the same buffered response repeatedly.
+The safe startup gate, disabled extension alerts and production suspension
+remain unchanged. Any future live runner still needs a defensible fresh-data
+method, a Liverpool extraction-to-Telegram demonstration and explicit approval
+before production deployment. No timed reloads, threshold testing, credential
+changes, messages or Render changes are introduced by this documentation update.
