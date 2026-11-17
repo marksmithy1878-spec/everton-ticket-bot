@@ -297,3 +297,11 @@ test("command extraction retains no unrelated payload fields", () => {
     assert.equal(output.includes(value), false);
   }
 });
+
+
+test("query-bearing commands are separate candidates and competing target IDs fail closed", () => {
+  const base = "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy";
+  const query = requestWith(observedCommand(), {url: base + "?mode=other"});
+  assert.equal(requestFixture(query, 1481).source, "request-query-and-body");
+  assert.equal(requestFixture(requestWith(observedCommand(), {url: base + "?targetEvent=1480"}), 1481).kind, "unknown");
+});

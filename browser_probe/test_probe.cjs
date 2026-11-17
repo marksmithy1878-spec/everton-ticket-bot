@@ -44,13 +44,13 @@ test("raw query tokens, request/response headers, bodies and personal data never
   for (const privateValue of ["secret-query", "secret-header", "private-account", "private-seat-response", "https://"]) assert.equal(output.includes(privateValue), false);
   assert.equal(JSON.parse(output).ticket_detection_validated, false);
 });
-test("manifest has no host permissions and forbids outbound extension connections", () => {
+test("manifest permits Telegram only and no ticket-site network access", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "manifest.json")));
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.permissions, undefined);
-  assert.equal(manifest.host_permissions, undefined);
+  assert.deepEqual(manifest.host_permissions, ["https://api.telegram.org/*"]);
   assert.equal(manifest.content_scripts, undefined);
-  assert.match(manifest.content_security_policy.extension_pages, /connect-src 'none'/);
+  assert.match(manifest.content_security_policy.extension_pages, /connect-src https:\/\/api\.telegram\.org$/);
 });
 
 // Run the complete panel against simulated DevTools/DOM APIs, without any website.

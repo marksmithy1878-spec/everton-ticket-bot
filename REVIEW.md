@@ -301,3 +301,56 @@ remain unchanged. Any future live runner still needs a defensible fresh-data
 method, a Liverpool extraction-to-Telegram demonstration and explicit approval
 before production deployment. No timed reloads, threshold testing, credential
 changes, messages or Render changes are introduced by this documentation update.
+
+## Optional daytime Telegram candidate — 17 November
+
+Version 0.3.0 adds a separately armed daytime path. It reacts only to new native
+browser responses started after arming; the historical report reader cannot send
+opportunity messages. It adds no Everton requests, refreshes, clicks, proxies or
+background monitor. The laptop and DevTools must stay open. There remains no
+validated unattended source and no promised overnight coverage.
+
+The candidate's Telegram client holds privately entered token/chat ID in its
+panel-session closure, clears input fields on use and never saves them in reports,
+GitHub, storage or logs. The manifest permits only api.telegram.org egress, with
+no ticket-service host access. getMe must identify @EvertonResale_bot before even
+a TEST is sent. Starting additionally requires phone-receipt confirmation and
+explicit local approval on the Liverpool page. Earlier possible token exposure
+still needs resolving before live arming; no token rotation or Render environment
+change has occurred during this work.
+
+POSSIBLE requires a fresh POST HTTP 200, explicit agreeing command fixture IDs,
+current event 1480 page checks, valid positive section counts and acknowledged
+comparison-based section policy. AVAILABLE is never emitted. Fulham, pricing,
+preflight, HTTP 540/5085, missing identity, zero counts, stale data and failures
+cannot produce ticket alerts. The candidate positive Liverpool schema use is
+informed by the demonstrated Fulham format; a real positive Liverpool
+extraction-to-phone message remains unverified. It is a pilot, not a claim of
+completed live ticket detection.
+
+Delivery fingerprints and the restriction latch persist. One profile-scoped
+Web Lock prevents concurrent panels; navigation invalidates pending reads, sign-in
+expiry/other pages stop the session, and stop clears credentials. Corrupt or
+unwritable delivery state stops instead of silently discarding protection. A-B-A
+and identical section snapshots are suppressed for 30 minutes. Count identity is
+coarse and may miss replacement seats leaving the same totals. Notification
+failures are not recorded as delivery, with a one-minute retry gate requiring new
+fresh evidence. No stale resend queue or exactly-once delivery guarantee exists.
+Telegram 429 waits respect retry_after without automatic retries.
+
+Opportunity alerts can arrive at any hour. Routine hourly messages use UK quiet
+hours (00:00–06:00) and explicitly distinguish local liveness from response
+freshness. Heartbeats share a queue with native observations so a pending
+heartbeat cannot discard a ticket observation. No timing promise applies during
+laptop sleep or after DevTools closes.
+
+110 offline browser tests pass, including a complete simulated native request →
+existing decoder → candidate classifier → Telegram transport path and the
+production approval gate. They cover private-field exclusion, wrong bot/recipient,
+timeouts, rate limits, wrong/stale fixtures, duplicate persistence, storage errors,
+restriction persistence, DST, quiet hours, navigation races, one active panel and
+heartbeat overlap. No actual token was entered, no real messages or ticket-site
+requests were sent, and real Edge pilot operation is still unverified. The Python
+code/startup refusal and all production settings are unchanged. No approval to
+arm this candidate has yet been requested or received. Packaging is reproducible
+with package_browser.py and excludes all tests and private reports.

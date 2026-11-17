@@ -68,7 +68,11 @@
     let bodySource = null;
     let url;
     try { url = new URL(request.url); } catch { return fail("REQUEST_URL_UNAVAILABLE"); }
+    // The pilot admits only the captured no-query command form. A query-bearing
+    // candidate is labelled separately even if its parameters are not event IDs.
+    hasQuery = [...url.searchParams].length > 0;
     for (const [key, value] of url.searchParams) {
+      if (key.toLowerCase() === "targetevent") return fail("AMBIGUOUS_EVENT_FIELDS");
       if (isEventKey(key)) { hasQuery = true; values.push(value); }
     }
     if (values.length > 1) return fail("AMBIGUOUS_EVENT_FIELDS");

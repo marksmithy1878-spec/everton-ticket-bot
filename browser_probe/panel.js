@@ -171,7 +171,7 @@ ui.readResponses.addEventListener("click", async () => {
     const finalContext = await inspectPage();
     const sameFixture = fixtureId === 1480 ? finalContext.correct === true : finalContext.comparison === true;
     responseReview = {
-      diagnostic: "everton-response-review-v1", extension_version: "0.2.3",
+      diagnostic: "everton-response-review-v1", extension_version: "0.3.0",
       event_id: fixtureId, comparison_only: fixtureId === 1481, report_at: new Date().toISOString(),
       page_event_1480_verified: finalContext.correct === true,
       page_event_1481_verified: finalContext.comparison === true,
@@ -200,7 +200,7 @@ ui.readResponses.addEventListener("click", async () => {
       const binding = record.request_fixture;
       const fixtureText = binding.kind === "explicit-event" ? `Request event ${binding.event_id} matches page` : binding.kind === "conflict" ? "Conflicting event: excluded" : "Request event unconfirmed";
       const description = decoded.kind === "section-counts"
-        ? `${decoded.reported_places} section places reported; fixture binding and resale unverified`
+        ? `${decoded.reported_places} section places reported; resale and purchase unconfirmed`
         : decoded.kind === "api-error" ? `Availability request failed (API ${decoded.api_error_code})`
         : descriptions[decoded.reason] || "No usable inventory data; review required";
       for (const value of [record.method, record.status, fixtureText, description, record.state]) {
@@ -209,7 +209,7 @@ ui.readResponses.addEventListener("click", async () => {
       return row;
     }));
     ui.responseStatus.textContent = responseReview.capture_completed
-      ? `Read ${collected.length} existing records — ${fixtureLabel}. No ticket alerts; save the response report for review.`
+      ? `Read ${collected.length} existing records — ${fixtureLabel}. This response review sends no ticket alerts; save the report for review.`
       : "Response review was interrupted or restricted. Its records are not a completed live-source validation.";
     ui.saveResponses.disabled = false;
     render();

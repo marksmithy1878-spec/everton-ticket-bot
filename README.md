@@ -1,6 +1,6 @@
-# Everton v Liverpool 2026 — safe alert engine prototype
+# Everton v Liverpool 2026 — development project
 
-**NOT A LIVE TICKET MONITOR.** Do not deploy to Render as a ticket detector.
+**No dependable unattended ticket monitor has been demonstrated.** Keep Render suspended. The optional daytime candidate starts OFF.
 
 Event ID: **1480** (seen on the official Everton ticket page screenshot, 16 Nov 2026).
 Fixture: Everton v Liverpool, 29 November 2026.
@@ -29,10 +29,13 @@ Fixture: Everton v Liverpool, 29 November 2026.
   and are used ONLY by the offline tests; they must not be treated as real API fields.
 - `totalAvailableSeat` is section-level availability, not proof of resale tickets.
 - This package does **not** poll or interact with the Everton/Ticketmaster website.
-- No live site detection or Render deployment has been performed. Telegram authentication and a
-  real phone delivery were verified by the user before this review; tests in this checkout are mocked.
-- Deduplication and restriction state are currently in memory. Durable state and restart protection
-  must be integrated with a real runner before unattended operation is approved.
+- Browser request/response decoding has been demonstrated on Fulham. A positive Liverpool
+  opportunity-to-phone alert and any unattended monitor remain unverified. Render is unchanged.
+  Telegram phone delivery was verified earlier through a different path; the new browser sender
+  has only simulated transport tests and still needs a private real TEST.
+- The Python prototype keeps deduplication/restriction state in memory. The separate daytime
+  browser candidate persists only delivery fingerprints and a restriction latch. Neither provides
+  an approved unattended runner.
 - No polling interval has been demonstrated safe. Moving providers or using an ordinary browser
   is not proof of permission, reliable access, or protection from restrictions.
 
@@ -50,46 +53,44 @@ python main.py --telegram-test
 Never share or commit token values.
 
 ## Next development step
-Integrate a legitimate, validated read-only resale availability signal if one becomes
-available, with tests against known AVAILABLE and UNAVAILABLE live examples. Until then
-keep Render suspended and Auto-Deploy Off. A different hosting provider alone does not
-prove website access is permitted or that data is correct.
 
-See [REVIEW.md](REVIEW.md) for the code review, classification rules and proposed browser validation.
+Review and install the optional local daytime candidate, privately verify a TEST
+message, resolve any earlier token exposure, then obtain explicit approval before
+arming real ticket alerts. This candidate only reacts to new responses generated
+by normal browser use; it never refreshes Everton or supplies overnight coverage.
+Keep Render suspended and Auto-Deploy Off. A different cloud provider is not an
+established fix for the existing 403 responses.
 
-## Passive browser diagnostic (development only)
+See [REVIEW.md](REVIEW.md) for the investigation and live evidence.
 
-[`browser_probe`](browser_probe/README.md) contains a small Chrome/Edge DevTools
-extension that observes existing availability-request metadata. Version 0.2.3
-also reads response buffers already held by DevTools, exporting only allowlisted
-section counts, numeric error codes or matching fixture IDs. It never refreshes, clicks, calls inventory
-endpoints or sends Telegram messages. It is not a ticket detector.
+## Browser reader and optional daytime candidate
 
-The diagnostic has 62 passing offline JavaScript tests, including a panel run
-against simulated DevTools APIs. The 0.2.0 body reader has decoded a real Liverpool HTTP 540/API 5085 error
-and excluded the OPTIONS 200 preflight in Edge. These historical records are
-not fresh ticket evidence. The 0.2.1 Fulham comparison report also demonstrates positive decoding in
-Edge: 415 places across 15 sections, with the visible section 216 and 227 counts
-matching the map. Resale-only inventory and unattended freshness remain unverified.
-Version 0.2.3 supports the observed JSON command inside form-labelled request
-data, checking both command.eventId and command.targetEvent. The request format
-has been identified in the real Payload view and the corrected reader has
-completed a real Edge report: explicit request event 1481, 400 places across
-14 sections, response age 19 seconds at review, preflight excluded. This verifies
-comparison-fixture decoding; it does not validate Liverpool positive detection
-or an unattended source. No automatic requests are added. No repeated idle wait or Network-panel investigation is needed.
-Version 0.1.1 corrected the initial host filter to the captured
-`vv-app.eticketing.co.uk/v810/` service. No fresh unattended feed, live seat
-classifier or overnight operation is validated.
+[`browser_probe`](browser_probe/README.md) includes the verified section/fixture
+reader and the new **0.3.0 daytime candidate**. [Setup and limits](browser_probe/DAYTIME_PILOT.md)
+are written for the laptop user. The candidate starts OFF, uses new native
+browser callbacks only, and cannot turn saved reports or Fulham counts into
+Liverpool alerts. A fresh successful event-1480 command response with positive
+section counts can produce POSSIBLE TICKET OPPORTUNITY after explicit local
+approval. It never claims confirmed resale, individual-seat identity or purchase.
+
+The reader has been demonstrated in Edge: Liverpool HTTP 540/API 5085 remains
+unknown; Fulham event 1481 explicitly matched its request and decoded 400 places
+across 14 sections. OPTIONS 200 is correctly excluded. That comparison is distinct
+from proving a positive Liverpool alert or unattended source.
+
+There are **110 passing offline JavaScript tests**, including a complete simulated
+reader → classifier → Telegram path, credential gate, wrong bot, notification
+failures, persisted duplicates/restrictions, navigation races, one active session,
+UK quiet hours and a heartbeat overlapping a ticket observation. No real Telegram
+messages or ticket-site requests were sent by these tests. The Python code and
+its safe startup refusal are unchanged.
 
 ```
-node --test browser_probe/test_probe.cjs browser_probe/test_response_reader.cjs
+node --test browser_probe/test_*.cjs
+python package_browser.py
 ```
 
-The comparison diagnostic is complete. No additional installation or repeated
-Fulham page loads are needed for this milestone. There is no dependable
-unattended live source under the currently demonstrated access conditions.
-The existing Render worker stays suspended; the Python startup gate and
-extension's disabled ticket-alert state remain in place. A passive reader
-can only see data the normal browser obtains. Automatic polling/refresh and
-a complete Liverpool extraction-to-Telegram alert have not been demonstrated.
+The extension's only outbound permission is api.telegram.org; it has no ticket-site
+host permission, reload/click loop or background worker. Token and chat ID live only
+in its panel session and are cleared from inputs on use. Reviewable code is on
+`ticket-bot-v2`; no production deployment or credential rotation has occurred.
