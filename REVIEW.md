@@ -219,3 +219,30 @@ Liverpool-only idle checks remain unchanged. A fixture switch during review
 cannot complete a capture. All 50 offline JavaScript tests pass; positive
 decoding in real Edge is still unverified. The Python engine is unchanged.
 Production remains suspended and no deployment is authorized.
+
+
+## Positive response decoded in real Edge; request identity gap — 17 November
+
+The 0.2.1 Fulham comparison report completes successfully and decodes a POST
+HTTP 200 into 415 reported places across 15 sections. Its section 216 = 2 and
+227 = 14 figures match visible map/list badges in the accompanying screenshot.
+The OPTIONS 200 is excluded as preflight. This establishes positive section
+decoding from a real response in Edge, complementing the Liverpool 540/5085
+negative case. Resale and individual seats remain unverified. The report's
+page-context-only association does not independently bind the request fixture.
+No observed restriction flag is a claim only about this bounded capture.
+
+Version 0.2.2 adds an explicit request event-ID diagnostic. It parses supported
+JSON-root/form/query fields locally, retaining only matching allowlisted fixture
+IDs and fixed diagnostic labels. Unsupported, absent or ambiguous structures
+stay unknown; conflicting IDs prevent decoding. No raw bodies, other request
+values, URLs, credentials or account details leave the decoder. This expands
+local parsing of existing buffers; it does not request more website data. The
+real request format is not yet validated, so all decisions remain ERROR/UNKNOWN.
+
+57 offline browser tests pass. They include private-field exclusion, wrong
+fixture rejection, duplicate/escaped/nested fields, body limits, format errors,
+form/query conflicts and ensuring preflight/restricted request bodies are not
+inspected. The Python engine has not changed and retains its startup refusal.
+There is still no dependable unattended source, no automatic website refresh,
+no Telegram connection from this extension and no production deployment.

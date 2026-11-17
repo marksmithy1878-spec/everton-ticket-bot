@@ -56,6 +56,57 @@
       resale_verified: false, individual_seat_verified: false };
   }
 
+  // Diagnostic extraction only: an explicit root eventId is a candidate binding,
+  // not proof of a fresh, resale-specific source. Never export other body fields.
+  function requestFixture(request, expectedEventId) {
+    const fail = reason => ({ kind: "unknown", reason });
+    if (![1480, 1481].includes(expectedEventId)) return fail("UNSUPPORTED_PAGE_EVENT");
+    if (!request || request.method !== "POST") return fail("NON_INVENTORY_METHOD");
+    const isEventKey = key => ["eventid", "event_id"].includes(String(key).toLowerCase());
+    const values = [];
+    let hasQuery = false;
+    let bodySource = null;
+    let url;
+    try { url = new URL(request.url); } catch { return fail("REQUEST_URL_UNAVAILABLE"); }
+    for (const [key, value] of url.searchParams) {
+      if (isEventKey(key)) { hasQuery = true; values.push(value); }
+    }
+    if (values.length > 1) return fail("AMBIGUOUS_EVENT_FIELDS");
+    const post = request.postData;
+    if (post) {
+      const mime = typeof post.mimeType === "string" ? post.mimeType.split(";", 1)[0].trim().toLowerCase() : "";
+      if (typeof post.text === "string" && post.text.length > 65536) return fail("REQUEST_BODY_TOO_LARGE");
+      if (mime === "application/json" || /^application\/[a-z0-9.+-]+\+json$/.test(mime)) {
+        if (typeof post.text !== "string" || !post.text.length) return fail("REQUEST_BODY_UNAVAILABLE");
+        let body;
+        try { body = JSON.parse(post.text); } catch { return fail("REQUEST_JSON_INVALID"); }
+        if (!body || typeof body !== "object" || Array.isArray(body)) return fail("REQUEST_JSON_INVALID");
+        const keys = Object.keys(body).filter(isEventKey);
+        // Duplicates, escaped keys or nested event fields are not silently resolved.
+        // False negatives here are acceptable: this gate cannot enable live alerts.
+        const tokens = post.text.match(/"(?:eventId|event_id)"\s*:/gi) || [];
+        if (keys.length > 1 || tokens.length !== keys.length) return fail("AMBIGUOUS_EVENT_FIELDS");
+        if (keys.length === 1) { values.push(body[keys[0]]); bodySource = "request-json-root"; }
+      } else if (mime === "application/x-www-form-urlencoded") {
+        let params;
+        if (typeof post.text === "string" && post.text.length) {
+          params = [...new URLSearchParams(post.text)].filter(([key]) => isEventKey(key));
+        } else if (Array.isArray(post.params) && post.params.length <= 2000) {
+          params = post.params.filter(item => item && isEventKey(item.name)).map(item => [item.name, item.value]);
+        } else return fail("REQUEST_BODY_UNAVAILABLE");
+        if (params.length > 1) return fail("AMBIGUOUS_EVENT_FIELDS");
+        if (params.length === 1) { values.push(params[0][1]); bodySource = "request-form"; }
+      } else return fail("REQUEST_BODY_FORMAT_UNSUPPORTED");
+    }
+    if (!values.length) return fail("EXPLICIT_EVENT_FIELD_NOT_OBSERVED");
+    const ids = values.map(value => typeof value === "number" && Number.isSafeInteger(value) && value > 0
+      ? value : typeof value === "string" && /^[1-9][0-9]{0,6}$/.test(value) ? Number(value) : null);
+    if (ids.includes(null)) return fail("EVENT_FIELD_INVALID");
+    if (ids.some(id => id !== expectedEventId)) return { kind: "conflict", reason: "REQUEST_FIXTURE_CONFLICT" };
+    return { kind: "explicit-event", event_id: expectedEventId, matches_page_event: true,
+      source: hasQuery && bodySource ? "request-query-and-body" : bodySource || "request-query" };
+  }
+
   function bufferedContent(entry, timeoutMs) {
     return new Promise(resolve => {
       if (typeof entry.getContent !== "function") { resolve(unknown("BODY_READER_NOT_AVAILABLE")); return; }
@@ -73,7 +124,7 @@
     });
   }
 
-  async function readEntry(entry, summarize, now, { timeoutMs = 5000 } = {}) {
+  async function readEntry(entry, summarize, now, { timeoutMs = 5000, expectedEventId = 1480 } = {}) {
     const meta = summarize(entry, now);
     if (!meta) return null;
     const method = ["GET", "POST", "OPTIONS", "HEAD"].includes(entry.request.method)
@@ -86,7 +137,8 @@
       state: "ERROR/UNKNOWN", ticket_detection_validated: false,
       // A page-context association and an unvalidated parser must never produce
       // a ticket alert. Keep decoded facts separate from a live availability decision.
-      decision_reason: "LIVE_SOURCE_NOT_VALIDATED", response: null
+      decision_reason: "LIVE_SOURCE_NOT_VALIDATED",
+      request_fixture: unknown("NOT_READ"), response: null
     };
     if (meta.restriction) {
       output.decision_reason = "ACCESS_RESTRICTED_STOP";
@@ -96,6 +148,12 @@
     if (method !== "POST") {
       output.decision_reason = "NON_INVENTORY_METHOD";
       output.response = unknown(method === "OPTIONS" ? "PREFLIGHT_NOT_INVENTORY" : "POST_METHOD_NOT_OBSERVED");
+      return output;
+    }
+    output.request_fixture = requestFixture(entry.request, expectedEventId);
+    if (output.request_fixture.kind === "conflict") {
+      output.decision_reason = "REQUEST_FIXTURE_CONFLICT";
+      output.response = unknown("BODY_NOT_READ_ON_FIXTURE_CONFLICT");
       return output;
     }
     if (meta.family !== "venueAvailability") {
@@ -108,7 +166,7 @@
     return output;
   }
 
-  const api = { decodeBody, readEntry };
+  const api = { decodeBody, requestFixture, readEntry };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.EvertonResponseReader = Object.freeze(api);
 })(typeof window !== "undefined" ? window : this);

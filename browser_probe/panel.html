@@ -4,7 +4,7 @@
 <title>Everton Passive Check</title><link rel="stylesheet" href="panel.css"></head>
 <body>
 <main>
-  <p class="eyebrow">EVERTON v LIVERPOOL · EVENT 1480</p>
+  <p class="eyebrow">EVERTON TICKET DIAGNOSTIC · LIVERPOOL IDLE CHECK</p>
   <h1>Does the page update while idle?</h1>
   <p>This diagnostic watches availability requests the browser already makes. It does not reload the page, click anything on it, or check for tickets itself.</p>
   <p class="notice">No ticket alerts or overnight monitoring are active.</p>
@@ -16,11 +16,11 @@
   <div class="table"><table><thead><tr><th>Request start (UK time)</th><th>Family</th><th>HTTP</th><th>When</th><th>Fixture link</th></tr></thead><tbody id="rows"></tbody></table></div>
   <h2>Read responses already received</h2>
   <p id="responseFixture" class="notice">Response review supports Liverpool 1480 and Fulham 1481 comparison only. No ticket alerts.</p>
-  <p>This reads up to 20 existing availability records from DevTools. It does not refresh the website. Only safe section counts and numeric error codes leave the local response decoder.</p>
+  <p>This reads up to 20 existing availability records from DevTools. It does not refresh the website. Only allowlisted section counts, numeric error codes and a matching event ID leave the local decoders.</p>
   <div class="actions"><button id="readResponses">Read existing responses</button><button id="saveResponses" disabled>Save response report</button></div>
   <p id="responseStatus" role="status">No response review has started. This does not enable ticket alerts.</p>
-  <div class="table"><table><thead><tr><th>Method</th><th>HTTP</th><th>Decoded evidence</th><th>Decision</th></tr></thead><tbody id="responseRows"></tbody></table></div>
-  <p class="privacy">Reports exclude raw bodies, request bodies, cookies, headers, account details, full URLs and Telegram credentials. The response reader parses existing response bodies locally and retains only allowlisted facts. It does not validate a live feed.</p>
+  <div class="table"><table><thead><tr><th>Method</th><th>HTTP</th><th>Request fixture</th><th>Decoded evidence</th><th>Decision</th></tr></thead><tbody id="responseRows"></tbody></table></div>
+  <p class="privacy">Reports exclude raw bodies, request bodies, cookies, headers, account details, full URLs and Telegram credentials. The reader parses existing response bodies and request event fields locally. Other request values stay in the browser; only allowlisted facts enter reports. It does not validate a live feed.</p>
 </main>
 <script src="probe.js"></script><script src="response_reader.js"></script><script src="panel.js"></script>
 </body></html>

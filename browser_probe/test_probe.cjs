@@ -285,7 +285,7 @@ test("Fulham positive comparison stays unknown and is labelled separately from L
   assert.equal(report.observations[0].state, "ERROR/UNKNOWN");
   assert.equal(report.ticket_detection_validated, false);
   assert.match(h.elements.get("responseStatus").textContent, /Fulham comparison ONLY/);
-  assert.match(h.elements.get("responseFixture").textContent, /page-context association/);
+  assert.match(h.elements.get("responseFixture").textContent, /checked locally/);
   await h.elements.get("start").events.click();
   assert.equal(h.elements.get("finish").disabled, true);
 });
@@ -301,4 +301,21 @@ test("switching fixtures during comparison review cannot complete the capture", 
   const report = vm.runInContext("responseReview", h.context);
   assert.equal(report.event_id, 1481);
   assert.equal(report.capture_completed, false);
+});
+
+
+test("comparison passes its own expected fixture into the request decoder", async () => {
+  const item = currentEntry(-1000, 200); item.request.method = "POST";
+  item.request.postData = {mimeType: "application/json", text: JSON.stringify({eventId: 1481, token: "fake-sensitive-value"})};
+  item.getContent = callback => callback(JSON.stringify({errorCode: 200, data: {section: {
+    header: "sectionName~totalAvailableSeat", data: ["216~2", "227~14"]
+  }}}), "");
+  const h = harness({log: [item]}); h.page.location.pathname = "/evertonfc/EDP/Event/Index/1481";
+  await h.elements.get("readResponses").events.click(); await drain();
+  const report = vm.runInContext("responseReview", h.context);
+  assert.equal(report.observations[0].request_fixture.event_id, 1481);
+  assert.equal(report.observations[0].request_fixture.matches_page_event, true);
+  assert.equal(report.observations[0].state, "ERROR/UNKNOWN");
+  assert.equal(JSON.stringify(report).includes("fake-sensitive-value"), false);
+  assert.equal(h.elements.get("responseRows").children[0].children[2].textContent, "Request event 1481 matches page");
 });

@@ -12,8 +12,9 @@ page uses a different host. It never refreshes, clicks Try Again, selects a seat
 changes a filter, calls an inventory endpoint or attempts to bypass a restriction.
 The new response-review mode reads existing response buffers locally, using
 DevTools' `getContent`. It exports only allowlisted section counts or numeric
-API error codes. It does not read request bodies, cookies or headers and never
-exports raw response bodies. The only
+API error codes. Version 0.2.2 additionally parses supported request event fields
+locally and exports only a matching allowlisted event ID. It never exports raw
+request/response bodies, other request values, cookies or headers. The only
 page inspection returns four booleans: Liverpool seating page, Fulham comparison
 seating page, Liverpool unavailable redirect, and visible restriction. It returns
 no page text or URL. The idle check remains Liverpool-only.
@@ -74,8 +75,10 @@ ERROR/UNKNOWN. Existing unbound log entries have only page-context association;
 changing the page does not prove which fixture generated a historical response.
 Use a separate normal Fulham tab with DevTools open before one ordinary event
 navigation if a comparison is needed. No repeat refreshes or threshold testing.
-The extension itself still sends no website requests. A complete real positive
-response must be decoded before positive parsing can be called demonstrated.
+The extension itself still sends no website requests. The uploaded 0.2.1 comparison report demonstrates positive decoding from a
+complete real response: 415 places across 15 sections. The visible section 216
+(2) and 227 (14) counts match the map screenshot. This does not prove resale-only
+availability or freshness while idle.
 
 ## Restrictions and limitations
 
@@ -108,9 +111,9 @@ node --test browser_probe/test_probe.cjs browser_probe/test_response_reader.cjs
 python -m unittest -q
 ```
 
-There are 50 passing offline JavaScript tests. They use reconstructed metadata
+There are 57 passing offline JavaScript tests. They use reconstructed metadata
 and reduced screenshot transcriptions, not original full HAR/body recordings.
-The positive decoder still needs a real Edge check. Simulated APIs do not validate live data.
+The request event-ID extraction still needs a real Edge check. Simulated APIs do not validate live data.
 An attempted local Chromium render was blocked by the environment's socket
 permissions; no completed headless render is claimed. The DOM/DevTools harness
 covers the panel's response-review and safe-report objects.
@@ -126,3 +129,22 @@ These records were historical, not a fresh source. No block flag was observed
 in this report; that does not establish unrestricted continuous access.
 The diagnostic requires no Node installation for normal browser use; Node is
 used only for the developer test suite.
+
+## Explicit request fixture check (0.2.2)
+
+Response review now checks eventId/event_id at the JSON request root, in
+URL-encoded form fields, or in the request URL. These are candidate formats,
+not a claim that the live API uses them: only a real buffer check can establish
+that. Unsupported or absent fields remain unknown. Duplicate, nested, escaped,
+invalid and conflicting event fields fail closed. Arbitrary event IDs are never
+exported. A conflicting ID prevents response decoding for that record.
+Only the two allowlisted page fixtures 1480 and 1481 can be exported as matches.
+Other request values remain local; no raw request body is copied into reports.
+OPTIONS/preflight and restricted responses do not inspect request body fields.
+The idle metadata reader is unchanged and still does not read request bodies.
+
+After updating, use Read existing responses on the existing Fulham tab without
+a website refresh. Closing/reopening DevTools may discard response buffers in
+some browsers; if absent, report that limitation instead of repeated refreshes.
+Even a matching ID leaves the decision ERROR/UNKNOWN in this diagnostic. No
+Telegram messages, automatic refresh or live availability decision is enabled.

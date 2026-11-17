@@ -147,7 +147,7 @@ ui.readResponses.addEventListener("click", async () => {
   }
   const fixtureId = context.correct ? 1480 : 1481;
   const fixtureLabel = fixtureId === 1480 ? "Liverpool · event 1480" : "Fulham comparison ONLY · event 1481";
-  ui.responseFixture.textContent = `${fixtureLabel}. Counts have only page-context association unless an explicit request event ID is present; no ticket alerts.`;
+  ui.responseFixture.textContent = `${fixtureLabel}. Request event IDs and response counts are checked locally. No ticket alerts.`;
   const summarizeForFixture = (entry, now) => EvertonProbe.summarize(entry, now, fixtureId);
   ui.responseStatus.textContent = "Reading existing DevTools buffers; no website requests are being sent.";
   devtools.network.getHAR(async har => {
@@ -160,7 +160,7 @@ ui.readResponses.addEventListener("click", async () => {
     const selected = matching.sort((a, b) => Date.parse(a.startedDateTime) - Date.parse(b.startedDateTime)).slice(-20);
     for (const entry of selected) {
       if (run !== generation) break;
-      const record = await EvertonResponseReader.readEntry(entry, summarizeForFixture, now);
+      const record = await EvertonResponseReader.readEntry(entry, summarizeForFixture, now, { expectedEventId: fixtureId });
       if (run !== generation) break;
       if (record) collected.push(record);
       if (record && record.decision_reason === "ACCESS_RESTRICTED_STOP") {
@@ -171,7 +171,7 @@ ui.readResponses.addEventListener("click", async () => {
     const finalContext = await inspectPage();
     const sameFixture = fixtureId === 1480 ? finalContext.correct === true : finalContext.comparison === true;
     responseReview = {
-      diagnostic: "everton-response-review-v1", extension_version: "0.2.1",
+      diagnostic: "everton-response-review-v1", extension_version: "0.2.2",
       event_id: fixtureId, comparison_only: fixtureId === 1481, report_at: new Date().toISOString(),
       page_event_1480_verified: finalContext.correct === true,
       page_event_1481_verified: finalContext.comparison === true,
@@ -194,13 +194,16 @@ ui.readResponses.addEventListener("click", async () => {
         BODY_READER_TIMEOUT: "Local response read timed out",
         BODY_READER_FAILED: "Local response read failed",
         BODY_NOT_READ_ON_RESTRICTION: "Access restricted; body was not read",
+        BODY_NOT_READ_ON_FIXTURE_CONFLICT: "Conflicting fixture; response excluded",
         SECTION_SCHEMA_UNEXPECTED: "No recognised section inventory in this response"
       };
+      const binding = record.request_fixture;
+      const fixtureText = binding.kind === "explicit-event" ? `Request event ${binding.event_id} matches page` : binding.kind === "conflict" ? "Conflicting event: excluded" : "Request event unconfirmed";
       const description = decoded.kind === "section-counts"
         ? `${decoded.reported_places} section places reported; fixture binding and resale unverified`
         : decoded.kind === "api-error" ? `Availability request failed (API ${decoded.api_error_code})`
         : descriptions[decoded.reason] || "No usable inventory data; review required";
-      for (const value of [record.method, record.status, description, record.state]) {
+      for (const value of [record.method, record.status, fixtureText, description, record.state]) {
         const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
       }
       return row;

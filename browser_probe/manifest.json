@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Everton Passive Check",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Development diagnostic: observes existing availability traffic without making website requests.",
   "devtools_page": "devtools.html",
   "content_security_policy": {

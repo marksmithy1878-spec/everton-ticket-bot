@@ -152,3 +152,82 @@ test("response-buffer timeout does not issue retries", async () => {
   assert.equal(record.response.reason, "BODY_READER_TIMEOUT");
   assert.equal(calls, 1);
 });
+
+const { requestFixture } = require("./response_reader.js");
+function requestWith(body, overrides = {}) {
+  return {method: "POST", url: "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy",
+    postData: {mimeType: "application/json", text: JSON.stringify(body)}, ...overrides};
+}
+test("only a matching allowlisted root event ID leaves the request decoder", () => {
+  for (const eventId of [1480, 1481]) {
+    const output = requestFixture(requestWith({eventId, token: "fake-private-token", account: "fake-account"}), eventId);
+    assert.equal(output.kind, "explicit-event");
+    assert.equal(output.event_id, eventId);
+    assert.equal(output.source, "request-json-root");
+    assert.equal(JSON.stringify(output).includes("fake-"), false);
+  }
+  assert.equal(requestFixture(requestWith({eventId: "1480"}), 1480).kind, "explicit-event");
+  assert.equal(requestFixture(requestWith({eventId: 1480}), 9999).kind, "unknown");
+});
+test("conflicting request event IDs never expose arbitrary IDs or decode response counts", async () => {
+  for (const eventId of [1481, 987654]) {
+    const item = captured(); item.request = requestWith({eventId});
+    item.getContent = () => { throw new Error("response must not be read"); };
+    const result = await readEntry(item, summarize, NOW);
+    assert.equal(result.request_fixture.kind, "conflict");
+    assert.equal(result.decision_reason, "REQUEST_FIXTURE_CONFLICT");
+    assert.equal(result.response.reason, "BODY_NOT_READ_ON_FIXTURE_CONFLICT");
+    assert.equal(result.state, "ERROR/UNKNOWN");
+    assert.equal(JSON.stringify(result).includes(String(eventId)), false);
+  }
+});
+test("duplicate, nested and escaped JSON event keys fail closed", () => {
+  for (const text of ['{"eventId":1480,"eventId":1481}', '{"eventId":1480,"EVENTID":1480}',
+      '{"targetEvent":{"eventId":1480}}', '{"eventId":1480,"nested":{"eventId":1481}}',
+      '{"ev\\u0065ntId":1480}']) {
+    const request = requestWith({}); request.postData.text = text;
+    assert.equal(requestFixture(request, 1480).kind, "unknown");
+  }
+});
+test("invalid, oversized, unsupported and missing request bodies produce safe unknowns", () => {
+  for (const value of [true, null, [], {}, " 1480", "01480", "1480private", 1.5, -1480]) {
+    assert.equal(requestFixture(requestWith({eventId: value}), 1480).kind, "unknown");
+  }
+  for (const postData of [
+    {mimeType: "application/json", text: "{"},
+    {mimeType: "application/json", text: "[]"},
+    {mimeType: "application/json", text: "x".repeat(65537)},
+    {mimeType: "application/json"}, {mimeType: "text/plain", text: "fake-secret"}
+  ]) {
+    const request = requestWith({}, {postData});
+    const output = requestFixture(request, 1480);
+    assert.equal(output.kind, "unknown");
+    assert.equal(JSON.stringify(output).includes("fake-secret"), false);
+  }
+  assert.equal(requestFixture(requestWith({}), 1480).reason, "EXPLICIT_EVENT_FIELD_NOT_OBSERVED");
+});
+test("query and form event fields are conservative and conflicts are excluded", () => {
+  const query = "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy?eventId=1480&token=fake-private";
+  assert.equal(requestFixture({method: "POST", url: query}, 1480).source, "request-query");
+  assert.equal(requestFixture(requestWith({eventId: 1481}, {url: query}), 1480).kind, "conflict");
+  assert.equal(requestFixture(requestWith({eventId: 1480}, {url: query}), 1480).source, "request-query-and-body");
+  assert.equal(requestFixture({method: "POST", url: query + "&event_id=1480"}, 1480).kind, "unknown");
+  for (const postData of [
+    {mimeType: "application/x-www-form-urlencoded; charset=UTF-8", text: "eventId=1480&token=fake-private"},
+    {mimeType: "application/x-www-form-urlencoded", params: [{name: "eventId", value: "1480"}, {name: "token", value: "fake-private"}]}
+  ]) {
+    const output = requestFixture(requestWith({}, {postData}), 1480);
+    assert.equal(output.source, "request-form");
+    assert.equal(JSON.stringify(output).includes("fake-private"), false);
+  }
+  const repeated = requestWith({}, {postData: {mimeType: "application/x-www-form-urlencoded", text: "eventId=1480&eventId=1480"}});
+  assert.equal(requestFixture(repeated, 1480).kind, "unknown");
+});
+test("preflight and restrictions never inspect request body fields", async () => {
+  for (const options of [{method: "OPTIONS"}, {status: 403}]) {
+    const item = captured(inventory(), options);
+    Object.defineProperty(item.request, "postData", {get() {throw new Error("private request must not be read");}});
+    const output = await readEntry(item, summarize, NOW);
+    assert.equal(output.request_fixture.reason, "NOT_READ");
+  }
+});
