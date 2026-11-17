@@ -6,12 +6,19 @@ no access to Telegram credentials. It has no host permissions or background
 worker. Its extension-page policy forbids outbound network connections.
 
 It observes only existing DevTools metadata for the already-identified
-`venueAvailability` and `AreaAvailability` endpoint families on the official
-Everton ticketing origin. It never refreshes, clicks Try Again, selects a seat,
+`venueAvailability` and `AreaAvailability` endpoint families on the captured
+`https://vv-app.eticketing.co.uk/v810/` availability service. The main ticket
+page uses a different host. It never refreshes, clicks Try Again, selects a seat,
 changes a filter, calls an inventory endpoint or attempts to bypass a restriction.
 It does not read response bodies, request bodies, cookies or headers. The only
 page inspection reads whether the current location is event 1480 and whether
-a known restriction phrase is visible; it returns two booleans, not page text.
+a known restriction phrase is visible, with a separate event-unavailable redirect
+flag; it returns three booleans, not page text.
+
+Version **0.1.1** corrects the host filter using the 16 November stadium/Network
+screenshots. Version 0.1.0 incorrectly looked for inventory requests on the main
+ticket-page host and would have missed this service. No completed idle test or
+availability inference from that version should be treated as evidence.
 
 ## What this answers
 
@@ -76,3 +83,7 @@ python -m unittest -q
 
 The extension still requires a real Chrome/Edge trial on the user's machine.
 Simulated browser APIs do not validate live page access or detection.
+The panel installation and its refusal on the event-unavailable redirect have
+been observed in Edge; capture on the stadium page remains unverified. There are
+20 passing offline diagnostic tests, including a reconstructed HAR entry using
+the exact captured API URL and HTTP 540 status. It is not an original HAR export.

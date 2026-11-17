@@ -5,13 +5,12 @@
     if (!entry || !entry.request || !entry.response) return null;
     let url;
     try { url = new URL(entry.request.url); } catch { return null; }
-    if (url.origin !== "https://www.eticketing.co.uk" ||
-        !url.pathname.toLowerCase().startsWith("/evertonfc/")) return null;
-    const path = url.pathname.toLowerCase();
-    // These are only endpoint families already identified in the handover.
-    const family = path.includes("venueavailability") ? "venueAvailability" :
-      path.includes("areaavailability") ? "AreaAvailability" : null;
-    if (!family) return null;
+    // Exact service origin/version observed in the 16 Nov 13:15 screenshot.
+    // The ticket page is on www.eticketing.co.uk, but inventory is NOT.
+    if (url.origin !== "https://vv-app.eticketing.co.uk") return null;
+    const match = /^\/v810\/(venueavailability|areaavailability)\/buy\/?$/i.exec(url.pathname);
+    if (!match) return null;
+    const family = match[1].toLowerCase() === "venueavailability" ? "venueAvailability" : "AreaAvailability";
     let association = "page-context-only";
     for (const [key, value] of url.searchParams) {
       if (["eventid", "event_id"].includes(key.toLowerCase())) {

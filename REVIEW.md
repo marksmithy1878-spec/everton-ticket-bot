@@ -129,3 +129,35 @@ The next user action is to download the diagnostic package. Guide installation
 and the five-minute idle observation one action at a time. The resulting safe
 metadata report will help decide whether the browser supplies idle updates;
 it will not itself validate seat extraction or prove unattended viability.
+
+## Correction after reviewing original screenshots — 17 November
+
+The original stadium/Network screenshots were located and reviewed directly.
+The 13:15 screenshot shows `POST https://vv-app.eticketing.co.uk/v810/venueAvailability/buy`
+returning HTTP 540 with `errorCode: 5085` and `apiErrorMessage: "Event is not on sale"`
+while the Liverpool event 1480 map is visible behind the no-seats dialog.
+The 13:50 Fulham screenshot shows the response structure `data.section.header`
+and `data.section.data`: a tilde-delimited header beginning
+`sectionName~totalAvailableSeat~priceCode`, with rows matching the displayed
+section figures, including section 205 = 31, 242 = 4 and 243 = 3. Other fields
+are cropped/only partly visible, so no complete external schema is asserted.
+
+These screenshots expose a bug in the first passive diagnostic: its filter
+assumed availability traffic used the main `www.eticketing.co.uk/evertonfc/`
+origin/path. That assumption was wrong. Version 0.1.1 now matches only the
+captured HTTPS availability host, version and endpoint families. No requests
+have been sent to that service as part of this correction. Tests reconstruct
+minimal HAR metadata from the screenshot; they are not a captured live HAR.
+
+20 offline diagnostic tests now pass. The redirect refusal message also explains
+that event 1480 has redirected away from the stadium page rather than suggesting
+the fixture is wrong. In the user's Edge browser, installation/panel display and
+refusal on `EventNotAllowed` have been observed. The attempted direct event
+navigation returned the same unavailable page; no further retries are proposed.
+
+The current diagnostic has not completed an idle test. The old static images
+support reuse of known UI/API evidence and avoid repeating the Fulham exercise,
+but do not demonstrate native updates while idle, a resale-only signal, or a
+dependable overnight source. HTTP 200 setup/pricing responses remain insufficient.
+No raw screenshots, account identifiers, headers, cookies or response bodies
+have been added to this repository.

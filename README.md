@@ -64,10 +64,14 @@ extension that observes existing availability-request metadata while the user
 leaves the page untouched. It never refreshes, clicks, reads response bodies,
 calls inventory endpoints or sends Telegram messages. It is not a ticket detector.
 
-The diagnostic has 16 passing offline JavaScript tests, including a complete
+The diagnostic has 20 passing offline JavaScript tests, including a complete
 panel run against simulated DevTools APIs. It still needs a real trial on the
 user's Windows browser. Install and test it one step at a time; do not repeat
-the earlier Fulham/seat investigations or hunt for a new seat.
+the earlier Fulham/seat investigations or hunt for a new seat. Version 0.1.1
+fixes the initial host filter using the original screenshots; it now recognises
+the captured `vv-app.eticketing.co.uk/v810/` service. The first version's filter
+would have missed that traffic. Panel installation and redirect refusal have
+been seen in Edge; live availability capture and automatic updates remain unverified.
 
 ```
 node --test browser_probe/test_probe.cjs

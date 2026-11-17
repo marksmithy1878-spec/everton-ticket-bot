@@ -14,6 +14,7 @@ const seen = new Set();
 // and returns a boolean restriction flag. No page text or URL is returned.
 const PAGE_CHECK = String.raw`(() => ({
   correct: location.origin === "https://www.eticketing.co.uk" && /^\/evertonfc\/EDP\/Event\/Index\/1480\/?$/i.test(location.pathname),
+  unavailableRedirect: location.origin === "https://www.eticketing.co.uk" && /^\/evertonfc\/EDP\/Validation\/EventNotAllowed\/?$/i.test(location.pathname) && new URLSearchParams(location.search || "").getAll("eventId").length === 1 && new URLSearchParams(location.search || "").get("eventId") === "1480",
   blocked: /suspicious activity|unusual traffic|access denied|verify (?:you are|you're) human|checking your browser|temporarily (?:blocked|restricted)/i.test(document.body ? document.body.innerText : "")
 }))()`;
 
@@ -80,7 +81,12 @@ ui.start.addEventListener("click", async () => {
   ui.start.disabled = true;
   const context = await inspectPage();
   pageVerified = context.correct === true;
-  if (!pageVerified) { ui.status.textContent = "This check only runs on the official Liverpool event 1480 page."; render(); return; }
+  if (!pageVerified) {
+    ui.status.textContent = context.unavailableRedirect
+      ? "Everton has redirected event 1480 to its unavailable page. The stadium-page idle check has not started."
+      : "This check only runs on the official Liverpool event 1480 seating page.";
+    render(); return;
+  }
   if (context.blocked) { halt("A restriction message is visible. Diagnostic stopped; leave website activity paused.", true); return; }
   startedAt = Date.now();
   endedAt = null;

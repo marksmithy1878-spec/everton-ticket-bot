@@ -7,20 +7,20 @@ const path = require("node:path");
 const probe = require("./probe.js");
 const start = Date.parse("2026-11-16T19:00:00Z");
 function entry(overrides = {}) {
-  return { request: { url: "https://www.eticketing.co.uk/evertonfc/api/venueAvailability/buy?eventId=1480" },
+  return { request: { url: "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy" },
     response: { status: 200 }, startedDateTime: new Date(start + 1000).toISOString(), ...overrides };
 }
 
-test("filters only known availability families on the exact official origin", () => {
-  for (const url of ["https://other.test/evertonfc/venueAvailability/buy", "https://www.eticketing.co.uk/other/venueAvailability/buy", "http://www.eticketing.co.uk/evertonfc/venueAvailability/buy", "https://www.eticketing.co.uk.evil.test/evertonfc/venueAvailability/buy", "https://www.eticketing.co.uk/evertonfc/pricing/buy", "not-a-url"]) {
+test("filters only the captured availability service origin and version", () => {
+  for (const url of ["https://other.test/evertonfc/venueAvailability/buy", "https://www.eticketing.co.uk/other/venueAvailability/buy", "http://www.eticketing.co.uk/evertonfc/venueAvailability/buy", "https://www.eticketing.co.uk.evil.test/evertonfc/venueAvailability/buy", "https://www.eticketing.co.uk/evertonfc/pricing/buy", "https://www.eticketing.co.uk/evertonfc/api/venueAvailability/buy", "https://vv-app.eticketing.co.uk.evil.test/v810/venueAvailability/buy", "https://vv-app.eticketing.co.uk/v810/pricing/buy", "https://vv-app.eticketing.co.uk/v811/venueAvailability/buy", "https://vv-app.eticketing.co.uk/v810/venueAvailability/notbuy", "not-a-url"]) {
     assert.equal(probe.summarize(entry({ request: { url } }), start), null);
   }
   assert.equal(probe.summarize(entry(), start).family, "venueAvailability");
-  assert.equal(probe.summarize(entry({ request: { url: "https://www.eticketing.co.uk/evertonfc/AreaAvailability?eventId=1480" } }), start).family, "AreaAvailability");
+  assert.equal(probe.summarize(entry({ request: { url: "https://vv-app.eticketing.co.uk/v810/AreaAvailability/buy?eventId=1480" } }), start).family, "AreaAvailability");
 });
 test("wrong eventId is excluded and missing eventId is explicitly unconfirmed", () => {
-  assert.equal(probe.summarize(entry({ request: { url: "https://www.eticketing.co.uk/evertonfc/venueAvailability/buy?eventId=1481" } }), start), null);
-  assert.equal(probe.summarize(entry({ request: { url: "https://www.eticketing.co.uk/evertonfc/venueAvailability/buy" } }), start).association, "page-context-only");
+  assert.equal(probe.summarize(entry({ request: { url: "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy?eventId=1481" } }), start), null);
+  assert.equal(probe.summarize(entry({ request: { url: "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy" } }), start).association, "page-context-only");
 });
 test("old requests finishing later do not become new idle updates", () => {
   const item = probe.summarize(entry({ startedDateTime: new Date(start - 1000).toISOString() }), start);
@@ -37,7 +37,7 @@ test("access restrictions are flagged; 540 is an ordinary unknown error", () => 
   assert.equal(probe.summarize(entry({ response: { status: 540 } }), start).restriction, false);
 });
 test("raw query tokens, request/response headers, bodies and personal data never reach reports", () => {
-  const raw = entry({ request: { url: "https://www.eticketing.co.uk/evertonfc/venueAvailability/buy?eventId=1480&token=secret-query", headers: [{ value: "secret-header" }], postData: { text: "private-account" } }, response: { status: 200, content: { text: "private-seat-response" } } });
+  const raw = entry({ request: { url: "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy?eventId=1480&token=secret-query", headers: [{ value: "secret-header" }], postData: { text: "private-account" } }, response: { status: 200, content: { text: "private-seat-response" } } });
   const item = probe.summarize(raw, start);
   item.raw = raw;
   const output = JSON.stringify(probe.makeReport(start, start + 10000, [item], false, true));
@@ -58,7 +58,7 @@ function harness({ log = [], store = new Map() } = {}) {
   const elements = new Map();
   const timers = [];
   const listeners = {};
-  const page = { location: { origin: "https://www.eticketing.co.uk", pathname: "/evertonfc/EDP/Event/Index/1480" }, document: { body: { innerText: "Ticket page" } } };
+  const page = { URLSearchParams, location: { origin: "https://www.eticketing.co.uk", pathname: "/evertonfc/EDP/Event/Index/1480" }, document: { body: { innerText: "Ticket page" } } };
   const counters = { inspections: 0, harReads: 0 };
   function element() {
     return { textContent: "", disabled: false, events: {}, children: [], classList: { toggle() {} },
@@ -150,7 +150,42 @@ test("fixture inspection returns booleans rather than page contents or URLs", ()
   const h = harness();
   const expression = vm.runInContext("PAGE_CHECK", h.context);
   const output = vm.runInNewContext(expression, h.page);
-  assert.deepEqual(Object.keys(output).sort(), ["blocked", "correct"]);
+  assert.deepEqual(Object.keys(output).sort(), ["blocked", "correct", "unavailableRedirect"]);
   assert.equal(output.correct, true);
   assert.equal(output.blocked, false);
+});
+
+// The endpoint below is transcribed from a real screenshot, not a mock route.
+test("captured Liverpool 540 request on vv-app is observed rather than silently ignored", () => {
+  const data = entry({ request: { url: "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy", method: "POST" }, response: { status: 540 } });
+  const item = probe.summarize(data, start);
+  assert.equal(item.family, "venueAvailability");
+  assert.equal(item.status, 540);
+  assert.equal(item.association, "page-context-only");
+});
+test("captured service request can explicitly identify event 1480 without exporting other query data", () => {
+  const data = entry({ request: { url: "https://vv-app.eticketing.co.uk/v810/venueAvailability/buy?eventId=1480&token=private" } });
+  const item = probe.summarize(data, start);
+  assert.equal(item.association, "request-event-1480");
+  assert.equal(JSON.stringify(item).includes("private"), false);
+});
+test("event-unavailable redirect explains the refusal without reading or replaying requests", async () => {
+  const h = harness();
+  h.page.location.pathname = "/evertonfc/EDP/Validation/EventNotAllowed";
+  h.page.location.search = "?eventId=1480&reason=EventNoAvailableSalesModesOrSoldOut";
+  await h.elements.get("start").events.click();
+  assert.equal(h.counters.harReads, 0);
+  assert.equal(h.elements.get("new").textContent, 0);
+  assert.match(h.elements.get("status").textContent, /redirected event 1480/);
+  assert.equal(h.elements.get("save").disabled, true);
+});
+test("another event or duplicate event identifiers do not get the Liverpool redirect label", async () => {
+  for (const query of ["?eventId=1481", "?eventId=1480&eventId=1481"]) {
+    const h = harness();
+    h.page.location.pathname = "/evertonfc/EDP/Validation/EventNotAllowed";
+    h.page.location.search = query;
+    await h.elements.get("start").events.click();
+    assert.equal(h.counters.harReads, 0);
+    assert.doesNotMatch(h.elements.get("status").textContent, /redirected event 1480/);
+  }
 });
