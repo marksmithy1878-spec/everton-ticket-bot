@@ -1,7 +1,8 @@
 /* Pure, offline-testable metadata filter. No raw URLs, bodies or headers retained. */
 "use strict";
 (function (root) {
-  function summarize(entry, checkStartedAt) {
+  function summarize(entry, checkStartedAt, expectedEventId = 1480) {
+    if (![1480, 1481].includes(expectedEventId)) return null;
     if (!entry || !entry.request || !entry.response) return null;
     let url;
     try { url = new URL(entry.request.url); } catch { return null; }
@@ -14,8 +15,8 @@
     let association = "page-context-only";
     for (const [key, value] of url.searchParams) {
       if (["eventid", "event_id"].includes(key.toLowerCase())) {
-        if (value !== "1480") return null;
-        association = "request-event-1480";
+        if (value !== String(expectedEventId)) return null;
+        association = `request-event-${expectedEventId}`;
       }
     }
     const timestamp = Date.parse(entry.startedDateTime);

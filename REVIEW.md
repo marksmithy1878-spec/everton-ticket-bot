@@ -199,3 +199,23 @@ exercised through the simulated DOM/DevTools harness; no successful headless
 render or live response-buffer validation is claimed. The next bounded user check
 is to read the existing buffers after updating the extension, with no new idle
 wait or website refresh. Production remains suspended and unchanged.
+
+
+## Real negative response validated; comparison reader — 17 November
+
+The uploaded 0.2.0 safe response report has capture_completed true, two reviewed
+records and no observed restriction flag. The POST returns HTTP 540/API 5085;
+the HTTP 200 record is OPTIONS preflight with no inventory body read. Both
+records are historical, page-context-only and correctly ERROR/UNKNOWN. This
+demonstrates the negative decoding/report path in real Edge, not live ticket
+detection, resale availability or unattended monitoring. No raw report or
+user-specific telemetry is committed here.
+
+Version 0.2.1 adds Fulham 1481 comparison-only response review to test the
+positive decoder on a complete response. Reports label the inspected fixture,
+retain the page-context-only limitation, and never emit a ticket alert. Explicit
+request event IDs that conflict with the inspected fixture are excluded.
+Liverpool-only idle checks remain unchanged. A fixture switch during review
+cannot complete a capture. All 50 offline JavaScript tests pass; positive
+decoding in real Edge is still unverified. The Python engine is unchanged.
+Production remains suspended and no deployment is authorized.

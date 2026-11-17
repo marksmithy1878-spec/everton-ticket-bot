@@ -151,7 +151,7 @@ test("fixture inspection returns booleans rather than page contents or URLs", ()
   const h = harness();
   const expression = vm.runInContext("PAGE_CHECK", h.context);
   const output = vm.runInNewContext(expression, h.page);
-  assert.deepEqual(Object.keys(output).sort(), ["blocked", "correct", "unavailableRedirect"]);
+  assert.deepEqual(Object.keys(output).sort(), ["blocked", "comparison", "correct", "unavailableRedirect"]);
   assert.equal(output.correct, true);
   assert.equal(output.blocked, false);
 });
@@ -209,7 +209,7 @@ test("response review identifies POST errors and OPTIONS successes without readi
   assert.equal(h.elements.get("saveResponses").disabled, false);
 });
 test("response review does not read buffers when the inspected page is wrong", async () => {
-  const h = harness(); h.page.location.pathname = "/evertonfc/EDP/Event/Index/1481";
+  const h = harness(); h.page.location.pathname = "/evertonfc/EDP/Event/Index/9999";
   await h.elements.get("readResponses").events.click();
   assert.equal(h.counters.harReads, 0);
 });
@@ -257,4 +257,48 @@ test("an unavailable DevTools log is not reported as a completed empty review", 
   assert.equal(report.metadata_available, false);
   assert.equal(report.capture_completed, false);
   assert.equal(report.records_reviewed, 0);
+});
+
+
+test("comparison filtering requires an allowlisted fixture and excludes conflicting event IDs", () => {
+  const withId = id => entry({request: {url: `https://vv-app.eticketing.co.uk/v810/venueAvailability/buy?eventId=${id}`}});
+  assert.equal(probe.summarize(withId(1481), start, 1481).association, "request-event-1481");
+  assert.equal(probe.summarize(withId(1480), start, 1481), null);
+  assert.equal(probe.summarize(withId(1481), start), null);
+  assert.equal(probe.summarize(entry(), start, 9999), null);
+});
+
+test("Fulham positive comparison stays unknown and is labelled separately from Liverpool", async () => {
+  const item = currentEntry(-1000, 200); item.request.method = "POST";
+  item.getContent = callback => callback(JSON.stringify({errorCode: 200, data: {section: {
+    header: "sectionName~totalAvailableSeat~priceCode", data: ["205~31~98", "242~4~101", "243~3~101"]
+  }}}), "");
+  const h = harness({log: [item]}); h.page.location.pathname = "/evertonfc/EDP/Event/Index/1481";
+  await h.elements.get("readResponses").events.click(); await drain();
+  const report = vm.runInContext("responseReview", h.context);
+  assert.equal(report.event_id, 1481);
+  assert.equal(report.comparison_only, true);
+  assert.equal(report.page_event_1480_verified, false);
+  assert.equal(report.page_event_1481_verified, true);
+  assert.equal(report.capture_completed, true);
+  assert.equal(report.observations[0].response.reported_places, 38);
+  assert.equal(report.observations[0].state, "ERROR/UNKNOWN");
+  assert.equal(report.ticket_detection_validated, false);
+  assert.match(h.elements.get("responseStatus").textContent, /Fulham comparison ONLY/);
+  assert.match(h.elements.get("responseFixture").textContent, /page-context association/);
+  await h.elements.get("start").events.click();
+  assert.equal(h.elements.get("finish").disabled, true);
+});
+
+test("switching fixtures during comparison review cannot complete the capture", async () => {
+  let finishRead;
+  const item = currentEntry(-1000, 200); item.request.method = "POST";
+  item.getContent = callback => { finishRead = callback; };
+  const h = harness({log: [item]}); h.page.location.pathname = "/evertonfc/EDP/Event/Index/1481";
+  await h.elements.get("readResponses").events.click(); await drain();
+  h.page.location.pathname = "/evertonfc/EDP/Event/Index/1480";
+  finishRead(JSON.stringify({errorCode: 200}), ""); await drain();
+  const report = vm.runInContext("responseReview", h.context);
+  assert.equal(report.event_id, 1481);
+  assert.equal(report.capture_completed, false);
 });

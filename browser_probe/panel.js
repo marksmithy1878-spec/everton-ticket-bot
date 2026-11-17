@@ -1,5 +1,5 @@
 "use strict";
-const ui = Object.fromEntries(["start", "finish", "save", "status", "elapsed", "new", "old", "meaning", "rows", "readResponses", "saveResponses", "responseStatus", "responseRows"].map(id => [id, document.getElementById(id)]));
+const ui = Object.fromEntries(["start", "finish", "save", "status", "elapsed", "new", "old", "meaning", "rows", "readResponses", "saveResponses", "responseStatus", "responseRows", "responseFixture"].map(id => [id, document.getElementById(id)]));
 const devtools = typeof chrome !== "undefined" ? chrome.devtools : null;
 let startedAt = null;
 let endedAt = null;
@@ -16,6 +16,7 @@ const seen = new Set();
 // and returns a boolean restriction flag. No page text or URL is returned.
 const PAGE_CHECK = String.raw`(() => ({
   correct: location.origin === "https://www.eticketing.co.uk" && /^\/evertonfc\/EDP\/Event\/Index\/1480\/?$/i.test(location.pathname),
+  comparison: location.origin === "https://www.eticketing.co.uk" && /^\/evertonfc\/EDP\/Event\/Index\/1481\/?$/i.test(location.pathname),
   unavailableRedirect: location.origin === "https://www.eticketing.co.uk" && /^\/evertonfc\/EDP\/Validation\/EventNotAllowed\/?$/i.test(location.pathname) && new URLSearchParams(location.search || "").getAll("eventId").length === 1 && new URLSearchParams(location.search || "").get("eventId") === "1480",
   blocked: /suspicious activity|unusual traffic|access denied|verify (?:you are|you're) human|checking your browser|temporarily (?:blocked|restricted)/i.test(document.body ? document.body.innerText : "")
 }))()`;
@@ -138,24 +139,28 @@ ui.readResponses.addEventListener("click", async () => {
     ui.responseStatus.textContent = "Navigation interrupted the response review. No website requests were made.";
     render(); return;
   }
-  if (!context.correct || context.blocked) {
+  if ((!context.correct && !context.comparison) || context.blocked) {
     readingResponses = false;
-    ui.responseStatus.textContent = "Response review needs the Liverpool seating page without a restriction message. No requests were made.";
+    ui.responseStatus.textContent = "Response review needs the Liverpool 1480 or Fulham 1481 seating page without a restriction message. No requests were made.";
     if (context.blocked) halt("Restriction observed; diagnostic stopped.", true);
     render(); return;
   }
+  const fixtureId = context.correct ? 1480 : 1481;
+  const fixtureLabel = fixtureId === 1480 ? "Liverpool · event 1480" : "Fulham comparison ONLY · event 1481";
+  ui.responseFixture.textContent = `${fixtureLabel}. Counts have only page-context association unless an explicit request event ID is present; no ticket alerts.`;
+  const summarizeForFixture = (entry, now) => EvertonProbe.summarize(entry, now, fixtureId);
   ui.responseStatus.textContent = "Reading existing DevTools buffers; no website requests are being sent.";
   devtools.network.getHAR(async har => {
     const collected = [];
     const now = Date.now();
     const logAvailable = har && Array.isArray(har.entries);
     const matching = (logAvailable ? har.entries : [])
-      .filter(entry => EvertonProbe.summarize(entry, now));
+      .filter(entry => summarizeForFixture(entry, now));
     // The most recent matching records are useful; do not reread the entire history.
     const selected = matching.sort((a, b) => Date.parse(a.startedDateTime) - Date.parse(b.startedDateTime)).slice(-20);
     for (const entry of selected) {
       if (run !== generation) break;
-      const record = await EvertonResponseReader.readEntry(entry, EvertonProbe.summarize, now);
+      const record = await EvertonResponseReader.readEntry(entry, summarizeForFixture, now);
       if (run !== generation) break;
       if (record) collected.push(record);
       if (record && record.decision_reason === "ACCESS_RESTRICTED_STOP") {
@@ -164,12 +169,14 @@ ui.readResponses.addEventListener("click", async () => {
       }
     }
     const finalContext = await inspectPage();
+    const sameFixture = fixtureId === 1480 ? finalContext.correct === true : finalContext.comparison === true;
     responseReview = {
-      diagnostic: "everton-response-review-v1", extension_version: "0.2.0",
-      event_id: 1480, report_at: new Date().toISOString(),
+      diagnostic: "everton-response-review-v1", extension_version: "0.2.1",
+      event_id: fixtureId, comparison_only: fixtureId === 1481, report_at: new Date().toISOString(),
       page_event_1480_verified: finalContext.correct === true,
+      page_event_1481_verified: finalContext.comparison === true,
       restriction_observed: stopped || finalContext.blocked === true,
-      capture_completed: logAvailable === true && run === generation && finalContext.correct === true && !finalContext.blocked,
+      capture_completed: logAvailable === true && run === generation && sameFixture && !finalContext.blocked,
       metadata_available: logAvailable === true,
       matching_records: matching.length, records_reviewed: collected.length,
       ticket_detection_validated: false, observations: collected
@@ -190,7 +197,7 @@ ui.readResponses.addEventListener("click", async () => {
         SECTION_SCHEMA_UNEXPECTED: "No recognised section inventory in this response"
       };
       const description = decoded.kind === "section-counts"
-        ? `${decoded.reported_places} section places reported; resale unverified`
+        ? `${decoded.reported_places} section places reported; fixture binding and resale unverified`
         : decoded.kind === "api-error" ? `Availability request failed (API ${decoded.api_error_code})`
         : descriptions[decoded.reason] || "No usable inventory data; review required";
       for (const value of [record.method, record.status, description, record.state]) {
@@ -199,14 +206,14 @@ ui.readResponses.addEventListener("click", async () => {
       return row;
     }));
     ui.responseStatus.textContent = responseReview.capture_completed
-      ? `Read ${collected.length} existing records. No ticket alerts are enabled; save the response report for review.`
+      ? `Read ${collected.length} existing records — ${fixtureLabel}. No ticket alerts; save the response report for review.`
       : "Response review was interrupted or restricted. Its records are not a completed live-source validation.";
     ui.saveResponses.disabled = false;
     render();
   });
 });
 ui.saveResponses.addEventListener("click", () => {
-  if (responseReview) saveJson(responseReview, "Everton_Response_Report.json");
+  if (responseReview) saveJson(responseReview, responseReview.comparison_only ? "Everton_Fulham_Comparison_Report.json" : "Everton_Response_Report.json");
 });
 if (devtools) {
   devtools.network.onRequestFinished.addListener(entry => void observe(entry));

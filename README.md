@@ -60,16 +60,17 @@ See [REVIEW.md](REVIEW.md) for the code review, classification rules and propose
 ## Passive browser diagnostic (development only)
 
 [`browser_probe`](browser_probe/README.md) contains a small Chrome/Edge DevTools
-extension that observes existing availability-request metadata. Version 0.2.0
+extension that observes existing availability-request metadata. Version 0.2.1
 also reads response buffers already held by DevTools, exporting only allowlisted
 section counts or numeric error codes. It never refreshes, clicks, calls inventory
 endpoints or sends Telegram messages. It is not a ticket detector.
 
-The diagnostic has 47 passing offline JavaScript tests, including a panel run
-against simulated DevTools APIs. Its metadata reader has read two historical
-records in Edge; the new body reader still needs a real trial. Install and test
-one step at a time. No repeat idle wait, Fulham exercise, seat hunt or website
-refresh is needed for the next check: use **Read existing responses** instead.
+The diagnostic has 50 passing offline JavaScript tests, including a panel run
+against simulated DevTools APIs. The 0.2.0 body reader has decoded a real Liverpool HTTP 540/API 5085 error
+and excluded the OPTIONS 200 preflight in Edge. These historical records are
+not fresh ticket evidence. Version 0.2.1 adds clearly labelled Fulham 1481
+comparison review; positive decoding from a complete real response remains
+unverified. No repeated idle wait or Network-panel investigation is needed.
 Version 0.1.1 corrected the initial host filter to the captured
 `vv-app.eticketing.co.uk/v810/` service. No fresh unattended feed, live seat
 classifier or overnight operation is validated.

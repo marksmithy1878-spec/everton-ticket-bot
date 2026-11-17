@@ -14,9 +14,9 @@ The new response-review mode reads existing response buffers locally, using
 DevTools' `getContent`. It exports only allowlisted section counts or numeric
 API error codes. It does not read request bodies, cookies or headers and never
 exports raw response bodies. The only
-page inspection reads whether the current location is event 1480 and whether
-a known restriction phrase is visible, with a separate event-unavailable redirect
-flag; it returns three booleans, not page text.
+page inspection returns four booleans: Liverpool seating page, Fulham comparison
+seating page, Liverpool unavailable redirect, and visible restriction. It returns
+no page text or URL. The idle check remains Liverpool-only.
 
 Version **0.1.1** corrects the host filter using the 16 November stadium/Network
 screenshots. Version 0.1.0 incorrectly looked for inventory requests on the main
@@ -65,7 +65,17 @@ the same folder, use **Reload** on its extension card, then reopen DevTools.
 The browser's Developer mode and the extension's own switch must stay enabled.
 
 The assistant should guide these steps individually, not give the user a large
-technical setup task. No need to hunt for a new seat or revisit Fulham.
+technical setup task. No need to hunt for an individual seat or repeat the idle wait.
+
+Version **0.2.1** permits response review on the Fulham event 1481 page as a
+positive decoder comparison. It labels the result and export as comparison-only,
+rejects explicitly conflicting request event IDs, and leaves every decision
+ERROR/UNKNOWN. Existing unbound log entries have only page-context association;
+changing the page does not prove which fixture generated a historical response.
+Use a separate normal Fulham tab with DevTools open before one ordinary event
+navigation if a comparison is needed. No repeat refreshes or threshold testing.
+The extension itself still sends no website requests. A complete real positive
+response must be decoded before positive parsing can be called demonstrated.
 
 ## Restrictions and limitations
 
@@ -98,9 +108,9 @@ node --test browser_probe/test_probe.cjs browser_probe/test_response_reader.cjs
 python -m unittest -q
 ```
 
-There are 47 passing offline JavaScript tests. They use reconstructed metadata
+There are 50 passing offline JavaScript tests. They use reconstructed metadata
 and reduced screenshot transcriptions, not original full HAR/body recordings.
-The new reader needs a real Edge check. Simulated APIs do not validate live data.
+The positive decoder still needs a real Edge check. Simulated APIs do not validate live data.
 An attempted local Chromium render was blocked by the environment's socket
 permissions; no completed headless render is claimed. The DOM/DevTools harness
 covers the panel's response-review and safe-report objects.
@@ -110,6 +120,9 @@ it read two historical venueAvailability records, HTTP 540 and HTTP 200. Their
 methods were absent from that report; it cannot establish whether the 200 was
 a preflight, setup or actual inventory response. A 6m44s idle observation showed
 no new matching records. Do not generalize that to proof the site never updates.
-The new response reader is not yet demonstrated against those live buffers.
+The uploaded 0.2.0 report demonstrates negative response decoding: POST HTTP 540
+with API error 5085, and OPTIONS HTTP 200 correctly excluded as preflight.
+These records were historical, not a fresh source. No block flag was observed
+in this report; that does not establish unrestricted continuous access.
 The diagnostic requires no Node installation for normal browser use; Node is
 used only for the developer test suite.
